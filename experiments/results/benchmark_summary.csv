@@ -1,9 +1,9 @@
 map,algorithm,runs,solved,solution_cost,actions,runtime_ms_mean,runtime_ms_median,expanded_nodes_mean,generated_nodes_mean,max_frontier_mean,peak_memory_kb_mean,heuristic_cache_hits,heuristic_cache_misses,plan_verified_legal
-easy_01.txt,ucs,5,True,3,3,0.136,0.134,12,41,9,5.56,0,0,True
-easy_01.txt,astar,5,True,3,3,0.176,0.161,10,35,9,8.6,15,3,True
-medium_01.txt,ucs,5,True,7,7,1.413,1.311,101,344,48,26.96,0,0,True
-medium_01.txt,astar,5,True,7,7,1.096,0.998,55,193,34,30.84,80,9,True
-hard_01.txt,ucs,5,True,10,10,11.671,11.997,811,2829,397,238.81,0,0,True
-hard_01.txt,astar,5,True,10,10,3.968,3.861,204,724,130,96.71,299,35,True
-example_map.txt,ucs,5,True,34,34,1019.057,1006.707,38405,102368,8280,19546.01,0,0,True
-example_map.txt,astar,5,True,34,34,565.681,556.892,6616,17700,1572,3350.12,7046,1143,True
+easy_01.txt,ucs,5,True,3,3,0.133,0.132,12,41,9,5.56,0,0,True
+easy_01.txt,astar,5,True,3,3,0.168,0.153,10,35,9,8.6,15,3,True
+medium_01.txt,ucs,5,True,7,7,1.667,1.615,101,344,48,26.96,0,0,True
+medium_01.txt,astar,5,True,7,7,1.162,1.194,55,193,34,30.84,80,9,True
+hard_01.txt,ucs,5,True,10,10,12.056,12.035,811,2829,397,238.81,0,0,True
+hard_01.txt,astar,5,True,10,10,3.787,3.515,204,724,130,96.71,299,35,True
+example_map.txt,ucs,5,True,34,34,955.313,948.202,38405,102368,8280,19546.01,0,0,True
+example_map.txt,astar,5,True,34,34,421.72,425.246,6616,17700,1572,3350.12,7046,1143,True

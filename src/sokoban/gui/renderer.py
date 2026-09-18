@@ -68,8 +68,15 @@ SOLO_COLOR = (40, 150, 186)     # Solo adventurer jacket
 # ==============================================================================
 _FONT_CACHE = {}
 
+def clear_caches():
+    _FONT_CACHE.clear()
+    _SPRITE_CACHE.clear()
+
 def get_font(size, bold=False):
     if pygame is None: return None
+    if not pygame.font.get_init():
+        clear_caches()
+        pygame.font.init()
     key = (size, bold)
     if key not in _FONT_CACHE:
         fonts = ['segoeui', 'sfprodisplay', 'helveticaneue', 'dejavusans', 'arial']
@@ -88,6 +95,7 @@ def get_font(size, bold=False):
 def text(surface, val, pos, size=15, color=TEXT_MAIN, bold=False, align="topleft"):
     if not str(val): return
     if not pygame.font.get_init():
+        clear_caches()
         pygame.font.init()
     f = get_font(size, bold)
     if not f: return
@@ -690,9 +698,9 @@ def draw_pill_metric(surface, x, y, w, h, label, value, val_color=TEXT_MAIN):
     text(surface, label.upper(), (x + 12, y + 8), size=11, color=TEXT_DIM, bold=True)
     text(surface, str(value), (x + 12, y + 26), size=17, color=val_color, bold=True)
 
-def draw_stat_bar(surface, x, y, w, h, label, val, max_val, color=ACCENT_CYAN):
+def draw_stat_bar(surface, x, y, w, h, label, val, max_val, color=ACCENT_CYAN, display_text=None):
     text(surface, label, (x, y), size=13, color=TEXT_MUTED)
-    val_str = str(val)
+    val_str = str(display_text) if display_text is not None else str(val)
     f = get_font(13, bold=True)
     v_img = f.render(val_str, True, TEXT_MAIN)
     surface.blit(v_img, (x + w - v_img.get_width(), y))
@@ -702,7 +710,11 @@ def draw_stat_bar(surface, x, y, w, h, label, val, max_val, color=ACCENT_CYAN):
     bg_r = pygame.Rect(x, bar_y, w, bar_h)
     rounded(surface, bg_r, (32, 44, 60), radius=3)
     
-    fill_ratio = min(1.0, max(0.04, (val / max(1, max_val)) if max_val else 0.5))
+    try:
+        numeric_val = float(val)
+        fill_ratio = min(1.0, max(0.04, (numeric_val / max(1, max_val)) if max_val else 0.5))
+    except (ValueError, TypeError):
+        fill_ratio = 0.5
     fill_w = int(w * fill_ratio)
     fill_r = pygame.Rect(x, bar_y, fill_w, bar_h)
     rounded(surface, fill_r, color, radius=3)
@@ -881,7 +893,13 @@ def single_scene(surface, board, result, algorithm, index, paused=True, status_o
     pill_h = 46
     draw_pill_metric(surface, px + 14, py + 44, pill_w, pill_h, "ALGORITHM", algorithm.upper(), ACCENT_CYAN)
     draw_pill_metric(surface, px + 22 + pill_w, py + 44, pill_w, pill_h, "PLAYBACK", status_label, status_color)
-    draw_pill_metric(surface, px + 14, py + 95, pill_w, pill_h, "SOLUTION", "SOLVED" if is_solved else "UNSOLVABLE", ACCENT_GREEN if is_solved else ACCENT_CORAL)
+    if not is_solved:
+        sol_text, sol_col = "UNSOLVABLE", ACCENT_CORAL
+    elif is_finished:
+        sol_text, sol_col = "SOLVED", ACCENT_GREEN
+    else:
+        sol_text, sol_col = "IN PROGRESS", ACCENT_CYAN
+    draw_pill_metric(surface, px + 14, py + 95, pill_w, pill_h, "STATE", sol_text, sol_col)
     draw_pill_metric(surface, px + 22 + pill_w, py + 95, pill_w, pill_h, "STEP", f"{index} / {max_steps}", TEXT_MAIN)
     
     # Card 2: Performance Telemetry
@@ -934,7 +952,30 @@ def single_scene(surface, board, result, algorithm, index, paused=True, status_o
 
 
 
-def competitive_scene(surface, board, state, step_limit, agent_names=('A*', 'GBFS')):
+def get_match_emotes_and_standing(s1: int, s2: int, is_finished: bool):
+    """Derive winner/loser emotes and standing string.
+    
+    STRICT INVARIANT:
+    - While is_finished is False: emotes are strictly (None, None). No crowns or crying icons.
+    - When is_finished is True: winner gets 'celebrate' (crown), loser gets 'cry', tied gets ('tie', 'tie').
+    """
+    if is_finished:
+        if s1 > s2:
+            return "celebrate", "cry", "AGENT 1 WINS!", A1_COLOR
+        elif s2 > s1:
+            return "cry", "celebrate", "AGENT 2 WINS!", A2_COLOR
+        else:
+            return "tie", "tie", "MATCH DRAWN", ACCENT_AMBER
+    else:
+        if s1 > s2:
+            return None, None, "Agent 1 Leads", A1_COLOR
+        elif s2 > s1:
+            return None, None, "Agent 2 Leads", A2_COLOR
+        else:
+            return None, None, "Tied Match", ACCENT_AMBER
+
+
+def competitive_scene(surface, board, state, step_limit, agent_names=('A*', 'GBFS'), last_turn=None, paused=True):
     width, height = surface.get_size()
     surface.fill(BG_DARK)
     
@@ -942,30 +983,16 @@ def competitive_scene(surface, board, state, step_limit, agent_names=('A*', 'GBF
     s1, s2 = state.scores(board.goals)
     is_finished = (state.step >= step_limit)
     
-    # Determine Emotes:
-    # Winner gets celebration (crown + sparkles), Loser gets crying face with tears, Tie gets neutral/handshake
-    if s1 > s2:
-        emote1, emote2 = "celebrate", "cry"
-        leader_str = "AGENT 1 WINS!" if is_finished else "AGENT 1 LEADS"
-        leader_col = A1_COLOR
-    elif s2 > s1:
-        emote1, emote2 = "cry", "celebrate"
-        leader_str = "AGENT 2 WINS!" if is_finished else "AGENT 2 LEADS"
-        leader_col = A2_COLOR
-    else:
-        emote1, emote2 = "tie", "tie"
-        leader_str = "TIE MATCH"
-        leader_col = ACCENT_AMBER
+    emote1, emote2, leader_str, leader_col = get_match_emotes_and_standing(s1, s2, is_finished)
         
-    status_str = "MATCH OVER" if is_finished else "ROUND ACTIVE"
+    status_str = "MATCH COMPLETE" if is_finished else "ROUND ACTIVE"
     status_col = ACCENT_GREEN if is_finished else ACCENT_CYAN
     
-    # 1. Top Bar
+    # 1. Top Bar (Clean hierarchy: map, matchup, status - no redundant leader string here)
     badges = [
         (f"MAP: {board.width}x{board.height}", (34, 46, 62), TEXT_MUTED, None),
         (f"{agent_names[0]} vs {agent_names[1]}", (38, 54, 72), TEXT_MAIN, None),
-        (leader_str, (32, 48, 64), leader_col, "star"),
-        (status_str, (26, 52, 40) if is_finished else (34, 52, 68), status_col, "dot"),
+        (status_str, (26, 52, 40) if is_finished else (34, 52, 68), status_col, "check" if is_finished else "dot"),
     ]
     draw_top_bar(surface, "SOKOBAN DUEL", "COMPETITIVE MULTI-AGENT ARENA", badges)
     
@@ -973,19 +1000,52 @@ def competitive_scene(surface, board, state, step_limit, agent_names=('A*', 'GBF
     board_rect = pygame.Rect(24, 76, 836, height - 164)
     panel_rect = pygame.Rect(880, 76, 376, height - 164)
     
-    # Pass Emotes for A1 and A2 to draw above their heads!
+    # Emotes map for board rendering (only populated if emotes exist, i.e., at match finish)
     emotes_map = {}
-    if hasattr(state, 'p1'): emotes_map[state.p1] = emote1
-    if hasattr(state, 'p2'): emotes_map[state.p2] = emote2
+    if emote1 and hasattr(state, 'p1'): emotes_map[state.p1] = emote1
+    if emote2 and hasattr(state, 'p2'): emotes_map[state.p2] = emote2
     
-    # Draw Playfield with Floating Emotes
+    # Draw Playfield
     draw_board(surface, board, state, board_rect, box_owners=state.owner_map(), emotes=emotes_map)
     
+    # Match Complete Overlay over board (when step >= step_limit)
+    if is_finished:
+        dim_surf = pygame.Surface((board_rect.width, board_rect.height), pygame.SRCALPHA)
+        dim_surf.fill((12, 16, 24, 170))
+        surface.blit(dim_surf, board_rect.topleft)
+
+        modal_w, modal_h = 460, 210
+        modal_rect = pygame.Rect(board_rect.centerx - modal_w // 2, board_rect.centery - modal_h // 2, modal_w, modal_h)
+        rounded(surface, modal_rect, CARD_BG, radius=14, border=CARD_BORDER, border_width=2)
+        rounded(surface, pygame.Rect(modal_rect.x, modal_rect.y, modal_w, 40), CARD_HEADER, radius=14)
+        pygame.draw.rect(surface, CARD_HEADER, (modal_rect.x, modal_rect.y + 26, modal_w, 14))
+        pygame.draw.line(surface, CARD_BORDER, (modal_rect.x, modal_rect.y + 40), (modal_rect.right, modal_rect.y + 40), 1)
+
+        text(surface, "MATCH COMPLETE", (modal_rect.centerx, modal_rect.y + 20), size=14, color=TEXT_MAIN, bold=True, align="center")
+
+        # Scoreline
+        score_y = modal_rect.y + 70
+        text(surface, f"{agent_names[0]}  [{s1}]   —   [{s2}]  {agent_names[1]}", (modal_rect.centerx, score_y), size=22, color=TEXT_MAIN, bold=True, align="center")
+
+        # Winner callout
+        win_y = modal_rect.y + 115
+        if s1 > s2:
+            draw_badge(surface, modal_rect.centerx - 100, win_y, f"{agent_names[0]} (AGENT 1) WINS", (28, 60, 44), ACCENT_GREEN, icon_type="check", h=32)
+        elif s2 > s1:
+            draw_badge(surface, modal_rect.centerx - 100, win_y, f"{agent_names[1]} (AGENT 2) WINS", (60, 36, 32), ACCENT_CORAL, icon_type="check", h=32)
+        else:
+            draw_badge(surface, modal_rect.centerx - 70, win_y, "MATCH DRAWN", (50, 48, 40), ACCENT_AMBER, h=32)
+
+        # Replay controls
+        ctrl_y = modal_rect.y + 168
+        draw_keycap(surface, modal_rect.centerx - 90, ctrl_y, "R", "Reset Match")
+        draw_keycap(surface, modal_rect.centerx + 20, ctrl_y, "ESC", "Exit")
+
     # 3. Right Control Panel
     px, py, pw = panel_rect.x, panel_rect.y, panel_rect.width
     
-    # Card 1: Duel Scorecard with Reaction Emote Badges
-    c1_h = 176
+    # Card 1: Scoreboard
+    c1_h = 168
     c1 = pygame.Rect(px, py, pw, c1_h)
     rounded(surface, c1, CARD_BG, radius=12, border=CARD_BORDER, border_width=1)
     rounded(surface, pygame.Rect(px, py, pw, 34), CARD_HEADER, radius=12)
@@ -993,114 +1053,143 @@ def competitive_scene(surface, board, state, step_limit, agent_names=('A*', 'GBF
     pygame.draw.line(surface, CARD_BORDER, (px, py + 34), (px + pw, py + 34), 1)
     text(surface, "MATCH SCOREBOARD", (px + 16, py + 9), size=12, color=TEXT_MUTED, bold=True)
     
-    # Dual Agent Score Boxes with VS Divider
     sw = (pw - 52) // 2
-    sh = 82
+    sh = 76
     
     # Agent 1 Score Box
     r_a1 = pygame.Rect(px + 14, py + 42, sw, sh)
-    a1_bg = (22, 44, 60) if emote1 != "celebrate" else (22, 54, 72)
-    rounded(surface, r_a1, a1_bg, radius=8, border=A1_COLOR, border_width=2)
+    rounded(surface, r_a1, (20, 38, 54), radius=8, border=A1_COLOR, border_width=2)
     text(surface, "AGENT 1", (r_a1.x + 10, r_a1.y + 7), size=11, color=A1_HILITE, bold=True)
     text(surface, agent_names[0], (r_a1.x + 10, r_a1.y + 21), size=12, color=TEXT_MUTED)
     text(surface, str(s1), (r_a1.right - 26, r_a1.y + 24), size=24, color=TEXT_MAIN, bold=True, align="center")
-    text(surface, "completed", (r_a1.x + 10, r_a1.y + 40), size=10, color=TEXT_DIM)
+    text(surface, "completed", (r_a1.x + 10, r_a1.y + 39), size=10, color=TEXT_DIM)
     
-    # Reaction Badge Pill inside Agent 1 box
-    a1_emote_rect = pygame.Rect(r_a1.x + 8, r_a1.y + 58, sw - 16, 18)
-    if emote1 == "celebrate":
-        rounded(surface, a1_emote_rect, (36, 68, 48), radius=9, border=ACCENT_GREEN, border_width=1)
-        draw_icon_star(surface, (a1_emote_rect.left + 16, a1_emote_rect.centery), 4, (255, 215, 60))
-        text(surface, "WINNER" if is_finished else "WINNING", (a1_emote_rect.centerx + 8, a1_emote_rect.centery), size=10, color=(255, 230, 100), bold=True, align="center")
-    elif emote1 == "cry":
-        rounded(surface, a1_emote_rect, (32, 44, 66), radius=9, border=(80, 140, 210), border_width=1)
-        td_cx, td_cy = a1_emote_rect.left + 16, a1_emote_rect.centery
-        pygame.draw.circle(surface, (70, 160, 255), (td_cx, td_cy + 1), 2)
-        pygame.draw.polygon(surface, (70, 160, 255), [(td_cx - 2, td_cy + 1), (td_cx + 2, td_cy + 1), (td_cx, td_cy - 3)])
-        text(surface, "DEFEAT" if is_finished else "LOSING", (a1_emote_rect.centerx + 8, a1_emote_rect.centery), size=10, color=(160, 205, 255), bold=True, align="center")
+    # Result/Status Sub-Pill
+    a1_sub = pygame.Rect(r_a1.x + 6, r_a1.y + 54, sw - 12, 16)
+    if is_finished:
+        if s1 > s2:
+            rounded(surface, a1_sub, (32, 64, 44), radius=8, border=ACCENT_GREEN)
+            text(surface, "WINNER", a1_sub.center, size=9, color=(240, 255, 240), bold=True, align="center")
+        elif s2 > s1:
+            rounded(surface, a1_sub, (32, 40, 56), radius=8, border=CARD_BORDER)
+            text(surface, "DEFEAT", a1_sub.center, size=9, color=TEXT_MUTED, bold=True, align="center")
+        else:
+            rounded(surface, a1_sub, (48, 44, 36), radius=8, border=ACCENT_AMBER)
+            text(surface, "TIED", a1_sub.center, size=9, color=ACCENT_AMBER, bold=True, align="center")
     else:
-        rounded(surface, a1_emote_rect, (44, 48, 58), radius=9, border=CARD_BORDER, border_width=1)
-        text(surface, "TIED MATCH", a1_emote_rect.center, size=10, color=TEXT_MUTED, bold=True, align="center")
-    
-    # VS Center Badge
-    vs_rect = pygame.Rect(px + 14 + sw + 3, py + 72, 20, 20)
+        rounded(surface, a1_sub, (26, 44, 60), radius=8)
+        text(surface, f"ALGO: {agent_names[0]}", a1_sub.center, size=9, color=TEXT_MUTED, align="center")
+
+    # VS Divider
+    vs_rect = pygame.Rect(px + 14 + sw + 3, py + 68, 20, 20)
     rounded(surface, vs_rect, CARD_HEADER, radius=10, border=CARD_BORDER)
     text(surface, "VS", vs_rect.center, size=9, color=TEXT_MUTED, bold=True, align="center")
-    
+
     # Agent 2 Score Box
     r_a2 = pygame.Rect(px + 28 + sw + 10, py + 42, sw, sh)
-    a2_bg = (54, 32, 28) if emote2 != "celebrate" else (68, 38, 32)
-    rounded(surface, r_a2, a2_bg, radius=8, border=A2_COLOR, border_width=2)
+    rounded(surface, r_a2, (48, 30, 28), radius=8, border=A2_COLOR, border_width=2)
     text(surface, "AGENT 2", (r_a2.x + 10, r_a2.y + 7), size=11, color=A2_HILITE, bold=True)
     text(surface, agent_names[1], (r_a2.x + 10, r_a2.y + 21), size=12, color=TEXT_MUTED)
     text(surface, str(s2), (r_a2.right - 26, r_a2.y + 24), size=24, color=TEXT_MAIN, bold=True, align="center")
-    text(surface, "completed", (r_a2.x + 10, r_a2.y + 40), size=10, color=TEXT_DIM)
-    
-    # Reaction Badge Pill inside Agent 2 box
-    a2_emote_rect = pygame.Rect(r_a2.x + 8, r_a2.y + 58, sw - 16, 18)
-    if emote2 == "celebrate":
-        rounded(surface, a2_emote_rect, (36, 68, 48), radius=9, border=ACCENT_GREEN, border_width=1)
-        draw_icon_star(surface, (a2_emote_rect.left + 16, a2_emote_rect.centery), 4, (255, 215, 60))
-        text(surface, "WINNER" if is_finished else "WINNING", (a2_emote_rect.centerx + 8, a2_emote_rect.centery), size=10, color=(255, 230, 100), bold=True, align="center")
-    elif emote2 == "cry":
-        rounded(surface, a2_emote_rect, (32, 44, 66), radius=9, border=(80, 140, 210), border_width=1)
-        td_cx, td_cy = a2_emote_rect.left + 16, a2_emote_rect.centery
-        pygame.draw.circle(surface, (70, 160, 255), (td_cx, td_cy + 1), 2)
-        pygame.draw.polygon(surface, (70, 160, 255), [(td_cx - 2, td_cy + 1), (td_cx + 2, td_cy + 1), (td_cx, td_cy - 3)])
-        text(surface, "DEFEAT" if is_finished else "LOSING", (a2_emote_rect.centerx + 8, a2_emote_rect.centery), size=10, color=(160, 205, 255), bold=True, align="center")
+    text(surface, "completed", (r_a2.x + 10, r_a2.y + 39), size=10, color=TEXT_DIM)
+
+    # Result/Status Sub-Pill
+    a2_sub = pygame.Rect(r_a2.x + 6, r_a2.y + 54, sw - 12, 16)
+    if is_finished:
+        if s2 > s1:
+            rounded(surface, a2_sub, (32, 64, 44), radius=8, border=ACCENT_GREEN)
+            text(surface, "WINNER", a2_sub.center, size=9, color=(240, 255, 240), bold=True, align="center")
+        elif s1 > s2:
+            rounded(surface, a2_sub, (32, 40, 56), radius=8, border=CARD_BORDER)
+            text(surface, "DEFEAT", a2_sub.center, size=9, color=TEXT_MUTED, bold=True, align="center")
+        else:
+            rounded(surface, a2_sub, (48, 44, 36), radius=8, border=ACCENT_AMBER)
+            text(surface, "TIED", a2_sub.center, size=9, color=ACCENT_AMBER, bold=True, align="center")
     else:
-        rounded(surface, a2_emote_rect, (44, 48, 58), radius=9, border=CARD_BORDER, border_width=1)
-        text(surface, "TIED MATCH", a2_emote_rect.center, size=10, color=TEXT_MUTED, bold=True, align="center")
+        rounded(surface, a2_sub, (44, 32, 30), radius=8)
+        text(surface, f"ALGO: {agent_names[1]}", a2_sub.center, size=9, color=TEXT_MUTED, align="center")
 
-    # Leader Banner inside Card 1
-    b_lead = pygame.Rect(px + 14, py + 132, pw - 28, 32)
+    # Match Standing Banner
+    b_lead = pygame.Rect(px + 14, py + 126, pw - 28, 30)
     rounded(surface, b_lead, CARD_HEADER, radius=6)
-    text(surface, "MATCH STANDING:", (b_lead.x + 12, b_lead.centery), size=11, color=TEXT_MUTED, bold=True, align="midleft")
-    text(surface, leader_str, (b_lead.right - 12, b_lead.centery), size=12, color=leader_col, bold=True, align="midright")
+    lbl_title = "FINAL RESULT:" if is_finished else "CURRENT LEADER:"
+    text(surface, lbl_title, (b_lead.x + 12, b_lead.centery), size=11, color=TEXT_MUTED, bold=True, align="midleft")
+    text(surface, leader_str, (b_lead.right - 12, b_lead.centery), size=11, color=leader_col, bold=True, align="midright")
 
-    # Card 2: Match Progress & Rules
-    c2_y = py + c1_h + 14
-    c2_h = 138
+    # Card 2: Round Progress
+    c2_y = py + c1_h + 10
+    c2_h = 78
     c2 = pygame.Rect(px, c2_y, pw, c2_h)
     rounded(surface, c2, CARD_BG, radius=12, border=CARD_BORDER, border_width=1)
-    rounded(surface, pygame.Rect(px, c2_y, pw, 34), CARD_HEADER, radius=12)
-    pygame.draw.rect(surface, CARD_HEADER, (px, c2_y + 22, pw, 12))
-    pygame.draw.line(surface, CARD_BORDER, (px, c2_y + 34), (px + pw, c2_y + 34), 1)
-    text(surface, "ROUND PROGRESS", (px + 16, c2_y + 9), size=12, color=TEXT_MUTED, bold=True)
+    rounded(surface, pygame.Rect(px, c2_y, pw, 28), CARD_HEADER, radius=12)
+    pygame.draw.rect(surface, CARD_HEADER, (px, c2_y + 18, pw, 10))
+    pygame.draw.line(surface, CARD_BORDER, (px, c2_y + 28), (px + pw, c2_y + 28), 1)
+    text(surface, "ROUND PROGRESS", (px + 16, c2_y + 7), size=11, color=TEXT_MUTED, bold=True)
     
-    draw_stat_bar(surface, px + 16, c2_y + 46, pw - 32, 6, "Turn Limit", state.step, step_limit, ACCENT_CYAN)
-    
-    text(surface, "Decision Model", (px + 16, c2_y + 88), size=12, color=TEXT_MUTED)
-    text(surface, "Simultaneous with Pre-Resolution", (px + 16, c2_y + 106), size=12, color=TEXT_MAIN, bold=True)
+    draw_stat_bar(surface, px + 16, c2_y + 38, pw - 32, 6, "CURRENT TURN", state.step, step_limit, ACCENT_CYAN, display_text=f"{state.step} / {step_limit}")
 
-    # Card 3: Box Ownership Legend
-    c3_y = c2_y + c2_h + 14
-    c3_h = panel_rect.bottom - c3_y
+    # Card 3: Real LAST TURN Telemetry
+    c3_y = c2_y + c2_h + 10
+    c3_h = 160
     c3 = pygame.Rect(px, c3_y, pw, c3_h)
     rounded(surface, c3, CARD_BG, radius=12, border=CARD_BORDER, border_width=1)
-    rounded(surface, pygame.Rect(px, c3_y, pw, 32), CARD_HEADER, radius=12)
-    pygame.draw.rect(surface, CARD_HEADER, (px, c3_y + 20, pw, 12))
-    pygame.draw.line(surface, CARD_BORDER, (px, c3_y + 32), (px + pw, c3_y + 32), 1)
-    text(surface, "OWNERSHIP VISUAL IDENTITY", (px + 16, c3_y + 8), size=12, color=TEXT_DIM, bold=True)
-    
-    leg_items = [
-        ("A1 Owned Box", A1_COLOR, "A1", "Cyan Double Rim + Shield"),
-        ("A2 Owned Box", A2_COLOR, "A2", "Coral Dotted Rim + Shield"),
-        ("Neutral Wooden Crate", WOOD_BODY, "B", "Unclaimed wooden crate"),
+    rounded(surface, pygame.Rect(px, c3_y, pw, 30), CARD_HEADER, radius=12)
+    pygame.draw.rect(surface, CARD_HEADER, (px, c3_y + 18, pw, 12))
+    pygame.draw.line(surface, CARD_BORDER, (px, c3_y + 30), (px + pw, c3_y + 30), 1)
+    text(surface, "LAST TURN TELEMETRY", (px + 16, c3_y + 8), size=11, color=TEXT_MUTED, bold=True)
+
+    if last_turn is not None:
+        # A1 Row
+        a1_y = c3_y + 38
+        rounded(surface, pygame.Rect(px + 14, a1_y, pw - 28, 28), (20, 32, 46), radius=6)
+        draw_badge(surface, px + 18, a1_y + 4, "A1", A1_COLOR, TEXT_MAIN, h=20)
+        text(surface, str(last_turn.a1_action).upper(), (px + 52, a1_y + 14), size=11, color=TEXT_MAIN, bold=True, align="midleft")
+        draw_badge(surface, px + 130, a1_y + 4, str(last_turn.a1_outcome), (30, 50, 70), A1_HILITE, h=20)
+        text(surface, f"{last_turn.a1_latency_ms:.2f} ms", (px + pw - 22, a1_y + 14), size=11, color=TEXT_MUTED, align="midright")
+
+        # A2 Row
+        a2_y = c3_y + 72
+        rounded(surface, pygame.Rect(px + 14, a2_y, pw - 28, 28), (38, 26, 26), radius=6)
+        draw_badge(surface, px + 18, a2_y + 4, "A2", A2_COLOR, TEXT_MAIN, h=20)
+        text(surface, str(last_turn.a2_action).upper(), (px + 52, a2_y + 14), size=11, color=TEXT_MAIN, bold=True, align="midleft")
+        draw_badge(surface, px + 130, a2_y + 4, str(last_turn.a2_outcome), (60, 36, 32), A2_HILITE, h=20)
+        text(surface, f"{last_turn.a2_latency_ms:.2f} ms", (px + pw - 22, a2_y + 14), size=11, color=TEXT_MUTED, align="midright")
+
+        # Resolution summary row
+        res_y = c3_y + 112
+        rounded(surface, pygame.Rect(px + 14, res_y, pw - 28, 36), CARD_HEADER, radius=6)
+        text(surface, "RESOLUTION:", (px + 24, res_y + 18), size=10, color=TEXT_MUTED, bold=True, align="midleft")
+        text(surface, str(last_turn.resolution_summary), (px + pw - 24, res_y + 18), size=11, color=ACCENT_AMBER, bold=True, align="midright")
+    else:
+        text(surface, "MATCH START — AWAITING FIRST MOVE", (px + pw // 2, c3_y + 90), size=11, color=TEXT_DIM, bold=True, align="center")
+
+    # Card 4: Compact Ownership Legend
+    c4_y = c3_y + c3_h + 10
+    c4_h = panel_rect.bottom - c4_y
+    c4 = pygame.Rect(px, c4_y, pw, c4_h)
+    rounded(surface, c4, CARD_BG, radius=12, border=CARD_BORDER, border_width=1)
+    rounded(surface, pygame.Rect(px, c4_y, pw, 26), CARD_HEADER, radius=12)
+    pygame.draw.rect(surface, CARD_HEADER, (px, c4_y + 16, pw, 10))
+    pygame.draw.line(surface, CARD_BORDER, (px, c4_y + 26), (px + pw, c4_y + 26), 1)
+    text(surface, "BOX OWNERSHIP KEY", (px + 16, c4_y + 6), size=10, color=TEXT_DIM, bold=True)
+
+    # 3 compact horizontal items
+    kw = (pw - 40) // 3
+    ky = c4_y + 36
+    items = [
+        ("A1", A1_COLOR, "A1 Owned", px + 14),
+        ("A2", A2_COLOR, "A2 Owned", px + 18 + kw),
+        ("B", WOOD_FRAME, "Neutral", px + 22 + 2 * kw),
     ]
-    ly = c3_y + 42
-    for title, col, badge_lbl, desc in leg_items:
-        mini_rect = pygame.Rect(px + 16, ly, 30, 30)
-        rounded(surface, mini_rect, WOOD_BODY, radius=4, border=col, border_width=2)
-        if badge_lbl != "B":
-            b_r = pygame.Rect(mini_rect.x + 2, mini_rect.y + 2, 14, 10)
-            rounded(surface, b_r, col, radius=2)
-        text(surface, title, (px + 56, ly + 2), size=13, color=TEXT_MAIN, bold=True)
-        text(surface, desc, (px + 56, ly + 16), size=11, color=TEXT_MUTED)
-        ly += 38
+    for tag, border_col, label, ix in items:
+        mini_rect = pygame.Rect(ix, ky, 22, 22)
+        rounded(surface, mini_rect, WOOD_BODY, radius=4, border=border_col, border_width=2)
+        text(surface, tag, mini_rect.center, size=9, color=TEXT_MAIN, bold=True, align="center")
+        text(surface, label, (ix + 28, ky + 11), size=10, color=TEXT_MAIN, align="midleft")
 
     # 4. Bottom Timeline
-    draw_bottom_timeline(surface, state.step, step_limit, paused=True, status=status_str)
+    draw_bottom_timeline(surface, state.step, step_limit, paused=paused, status=status_str)
+
 
 
 # ==============================================================================

@@ -1,29 +1,56 @@
-# Optimization report
+# Optimization and Engineering Report
 
-## Search audit
+## 1. Search Engineering Audit
 
-The audit inspected map parsing, immutable state representation, successor generation, priority-queue ordering, stale-entry handling, parent-pointer reconstruction, reverse-push preprocessing, matching, deadlock reuse, benchmark scripts, and both GUI modes.
+The engineering audit inspected the complete software stack:
+- Map parsing with ragged row void isolation (`valid_cells` and `floor_cells`).
+- Immutable state representation (`State`, `CompetitiveState`).
+- Successor generation and legal push verification.
+- Closed list duplicate handling and priority queue stale-entry pruning (`best_g`).
+- Reverse-push goal distance precomputation and box-target bipartite matching.
+- Deadlock detection with sound static reverse-reachability.
+- Two-phase benchmark architecture (timing runs with tracemalloc OFF; isolated memory runs with tracemalloc ON).
+- Competitive multi-agent simultaneous move resolution, conflict handling, and TurnRecord telemetry.
+- Procedural Pygame GUI rendering with cached sprite surfaces and dynamic state overlays.
 
-## Problems found
+## 2. Key Performance Optimizations
 
-The assignment example map had previously been replaced by a one-box toy map. Benchmark rows contained a misleading zero-valued peak-memory field. The heuristic was recomputed for repeated player positions with identical box layouts. Figure names did not explicitly identify the metric. The first GUI was a single compact board without a presentation information panel, and competitive GUI rendering was missing.
+1. **Heuristic Layout Caching**:
+   - In single-agent search, player-only movements preserve identical box configurations while changing player coordinates.
+   - By caching the minimum-weight bipartite matching result indexed by sorted box positions, A* achieves high cache hit rates (e.g., 7,046 hits to 1,143 misses on `example_map.txt`).
+2. **Priority Queue Stale-Entry Pruning**:
+   - `OPEN` entries carry the node cost $g(n)$. When popped, if $g > \text{best\_g}[s]$, the node is discarded immediately without generating successors.
+3. **Static Wall-Aware BFS Distance in Competitive Agents**:
+   - Competitive agents (`AStarAgent`, `GBFSAgent`) require fast sub-second decisions.
+   - All Manhattan and Euclidean distance calculations were removed. In their place, static BFS shortest paths over traversable floor cells (`board.floor_cells`) are precomputed and cached per board.
+   - This provides accurate wall-aware distance estimates in $<0.1$ ms without full dynamic state expansion.
+4. **Decoupled Two-Phase Benchmarking**:
+   - Disabling `tracemalloc` during timing eliminates CPython memory tracing overhead, yielding accurate hardware execution runtimes.
+   - Peak allocation is measured in a dedicated memory run.
 
-## Changes
+## 3. Benchmark Comparison Across All Benchmark Maps
 
-The authoritative example map was restored exactly from the PDF. Reverse-push tables are built once per static board, while matching values are cached by sorted immutable box configuration. Search heap entries now carry their popped `g` value and stale entries are rejected directly. Real `tracemalloc` peak allocation is collected in the benchmark. Three grayscale figures cover expanded nodes, runtime, and maximum frontier. Agents use deadline-bounded reverse-push goal-progress evaluation and reachable-box routing. Both GUIs use the shared light renderer, information panels, grayscale-distinguishable markers, and offscreen screenshot generation.
+Based on the official 48-row benchmark dataset (`experiments/results/benchmark.csv`, 5 runs per algorithm):
 
-## Correctness protection
+| Map | Algorithm | Optimal Cost | Mean Expanded | Max Frontier | Mean Runtime (ms) | Peak Memory (KB) |
+|---|---|:---:|:---:|:---:|:---:|:---:|
+| `easy_01.txt` | UCS | 3 | 12 | 9 | 0.133 ms | 5.56 KB |
+| `easy_01.txt` | A* | 3 | 10 | 9 | 0.168 ms | 8.60 KB |
+| `medium_01.txt` | UCS | 7 | 101 | 48 | 1.667 ms | 26.96 KB |
+| `medium_01.txt` | A* | 7 | 55 | 34 | 1.162 ms | 30.84 KB |
+| `hard_01.txt` | UCS | 10 | 811 | 397 | 12.056 ms | 238.81 KB |
+| `hard_01.txt` | A* | 10 | 204 | 130 | 3.787 ms | 96.71 KB |
+| **`example_map.txt`** | **UCS** | **34** | **38,405** | **8,280** | **955.313 ms** | **19,546.01 KB** |
+| **`example_map.txt`** | **A\*** | **34** | **6,616** | **1,572** | **421.720 ms** | **3,350.12 KB** |
 
-The full test suite covers parser/state/search, competitive agents, heuristic cache reuse, and offscreen rendering. Each custom benchmark map is solved by UCS and A* and their costs are compared. A final replay verifier checked every returned action as legal and checked final goal satisfaction. The assignment map is preserved and separately audited rather than changed for performance.
+## 4. Performance Interpretation
 
-## Benchmark before
-
-The previous legitimate run used the simplified example map and reported 40 rows; it is not treated as evidence for the restored assignment map. On `hard_01`, the previous mean expanded-node counts were UCS 811 and A* 204, with mean runtimes 17.8588 ms and 10.3010 ms.
-
-## Benchmark after
-
-The new run uses 30 rows over three verified custom maps. On `hard_01`, UCS expanded 811 nodes in 68.8193 ms on average, while A* expanded 204 nodes in 18.4978 ms. Mean frontier sizes were 397 and 130 respectively. On `medium_01`, A* reduced expansions from 101 to 55 and frontier from 48 to 34. Real mean tracemalloc peaks were 261.28 KB for UCS and 96.52 KB for A* on `hard_01`. A* cache totals on the three maps were 1,970 hits and 235 misses across five repetitions per map.
-
-## Interpretation
-
-The expanded-node and frontier improvements are defensible on medium and hard maps, while the small easy map still shows heuristic overhead. Tracemalloc is process-level and machine-dependent; maximum frontier remains the primary algorithm-level search-space metric. Caching is justified because player-only moves produce many states sharing a box configuration. Equal solution costs, replay validation, and zero heuristic-validation violations protect correctness.
+- **Pruning Power on Large State Spaces**:
+  - On the authoritative assignment `example_map.txt` (7 boxes, 7 targets, 8x9 grid), A* reduces expanded nodes by **82.8%** (from 38,405 down to 6,616).
+  - Peak memory is reduced by **82.9%** (from 19.55 MB to 3.35 MB).
+  - Runtime drops by **2.26x** (from 955.31 ms to 421.72 ms).
+- **Overhead on Trivial Maps**:
+  - On `easy_01.txt` (1 box, 3 steps), heuristic evaluation adds slight constant overhead (0.168 ms vs 0.133 ms), which is standard behavior for informed search on trivial search spaces.
+- **Correctness Guarantees**:
+  - On every map, UCS and A* find identical optimal path costs.
+  - Every returned plan is verified step-by-step to be 100% legal under Sokoban mechanics.

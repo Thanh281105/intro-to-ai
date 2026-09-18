@@ -1,7 +1,7 @@
 import heapq
 import time
 from itertools import count
-from .base import Agent
+from .base import Agent, static_distance
 from ..state import DIRECTIONS
 from ..heuristic import ReversePushHeuristic
 
@@ -16,12 +16,15 @@ class AStarAgent(Agent):
         box_cost = heuristic.for_boxes(boxes)
         if box_cost == float('inf'):
             return float('inf')
-        # Proximity to the nearest box to encourage approaching boxes
+        # Proximity to nearest box using wall-aware static floor distance (non-Manhattan)
         if boxes:
-            min_dist = min(abs(pos[0] - b[0]) + abs(pos[1] - b[1]) for b in boxes)
+            min_dist = min(static_distance(board, pos, b) for b in boxes)
+            if min_dist == float('inf'):
+                return float('inf')
         else:
             min_dist = 0
         return float(10 * box_cost + min_dist)
+
 
     def choose_action(self, state, board, time_limit_ms=1000):
         # Enforce strict internal deadline <= 950ms

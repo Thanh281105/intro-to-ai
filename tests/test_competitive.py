@@ -253,3 +253,58 @@ def test_agent_deadline_behavior_under_950ms():
     assert act in {'North', 'East', 'South', 'West'}
     # Must comfortably return before 1000ms and within internal limit
     assert elapsed_ms < 950.0
+
+
+def test_winner_loser_emotes_active_vs_final_invariants():
+    from sokoban.gui.renderer import get_match_emotes_and_standing
+    
+    # 1. While round is active (is_finished=False): STRICTLY NO CROWN, NO CRYING ICON
+    # Regardless of whether A1 leads, A2 leads, or tied
+    e1, e2, lead_str, _ = get_match_emotes_and_standing(s1=2, s2=0, is_finished=False)
+    assert e1 is None and e2 is None
+    assert "Leads" in lead_str and "WINS" not in lead_str
+
+    e1, e2, lead_str, _ = get_match_emotes_and_standing(s1=0, s2=2, is_finished=False)
+    assert e1 is None and e2 is None
+    assert "Leads" in lead_str and "WINS" not in lead_str
+
+    e1, e2, lead_str, _ = get_match_emotes_and_standing(s1=1, s2=1, is_finished=False)
+    assert e1 is None and e2 is None
+    assert "Tied" in lead_str and "WINS" not in lead_str
+
+    # 2. When match is complete (is_finished=True): Crown to winner, crying to loser, derived from final score
+    # A1 wins
+    e1, e2, lead_str, _ = get_match_emotes_and_standing(s1=2, s2=1, is_finished=True)
+    assert e1 == "celebrate"  # Crown
+    assert e2 == "cry"        # Crying icon
+    assert "AGENT 1 WINS!" in lead_str
+
+    # A2 wins
+    e1, e2, lead_str, _ = get_match_emotes_and_standing(s1=1, s2=3, is_finished=True)
+    assert e1 == "cry"        # Crying icon
+    assert e2 == "celebrate"  # Crown
+    assert "AGENT 2 WINS!" in lead_str
+
+    # Tie
+    e1, e2, lead_str, _ = get_match_emotes_and_standing(s1=2, s2=2, is_finished=True)
+    assert e1 == "tie" and e2 == "tie"
+    assert "MATCH DRAWN" in lead_str
+
+
+def test_turn_history_telemetry():
+    b = board_arena()
+    game = CompetitiveGame(b, AStarAgent(1), GBFSAgent(2), step_limit=5)
+    final_state = game.run()
+
+    assert final_state.step == 5
+    assert len(game.turn_history) == 5
+
+    for turn in game.turn_history:
+        assert turn.a1_action in {'North', 'East', 'South', 'West'}
+        assert turn.a2_action in {'North', 'East', 'South', 'West'}
+        assert turn.a1_outcome in {'MOVE', 'PUSH', 'BLOCKED', 'CONFLICT'}
+        assert turn.a2_outcome in {'MOVE', 'PUSH', 'BLOCKED', 'CONFLICT'}
+        assert turn.a1_latency_ms >= 0.0
+        assert turn.a2_latency_ms >= 0.0
+        assert isinstance(turn.resolution_summary, str)
+

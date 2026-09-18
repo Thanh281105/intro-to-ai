@@ -44,5 +44,14 @@ pygame.image.save(surface, comp_path)
 scores = gui_comp.state.scores(board_comp.goals)
 print(f"Saved authentic gui_competitive.png: {surface.get_size()}, step {gui_comp.state.step}/25, scores {scores}, owners {gui_comp.state.owners}")
 
+# 3. Competitive Arena Final Screenshot (Authentic Match Complete State at step n=25)
+# Renders Match Complete modal overlay, final score, crown on winner, crying on loser, box ownership
+gui_comp.state = comp_game.history[25]
+gui_comp.render(surface)
+comp_final_path = out / 'gui_competitive_final.png'
+pygame.image.save(surface, comp_final_path)
+final_scores = gui_comp.state.scores(board_comp.goals)
+print(f"Saved authentic gui_competitive_final.png: {surface.get_size()}, step {gui_comp.state.step}/25, final scores {final_scores}, owners {gui_comp.state.owners}")
+
 pygame.quit()
 print("All final screenshots successfully generated from actual renderer execution on genuine game history.")

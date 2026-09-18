@@ -3,6 +3,7 @@ try:
 except ImportError:
     pygame = None
 from .renderer import competitive_scene
+from ..competitive.game import CompetitiveGame
 
 class CompetitiveGameGUI:
     def __init__(self, board, game):
@@ -10,20 +11,36 @@ class CompetitiveGameGUI:
         self.game = game
         self.state = game.state
         self.paused = False
-        self.step_delay_ms = 350
+        self.step_delay_ms = 400
         self.last_step_time = 0
 
     def render(self, surface):
         names = tuple(getattr(a, 'name', f'Agent {i+1}') for i, a in enumerate(self.game.agents))
-        competitive_scene(surface, self.board, self.state, self.game.step_limit, agent_names=names)
+        last_turn = None
+        if hasattr(self.game, 'turn_history') and self.game.turn_history:
+            step_idx = self.state.step
+            if 0 < step_idx <= len(self.game.turn_history):
+                last_turn = self.game.turn_history[step_idx - 1]
+
+        competitive_scene(
+            surface,
+            self.board,
+            self.state,
+            self.game.step_limit,
+            agent_names=names,
+            last_turn=last_turn,
+            paused=self.paused,
+        )
 
     def step_forward(self):
         if self.state.step < self.game.step_limit:
-            from ..competitive.state import resolve
-            actions = [agent.choose_action(self.state, self.board, 1000) for agent in self.game.agents]
-            self.state = resolve(self.state, actions[0], actions[1], self.board)
-            if hasattr(self.game, 'history') and self.state not in self.game.history:
-                self.game.history.append(self.state)
+            self.state = self.game.step()
+
+    def reset_match(self):
+        agent1, agent2 = self.game.agents
+        self.game = CompetitiveGame(self.board, agent1, agent2, self.game.step_limit)
+        self.state = self.game.state
+        self.paused = True
 
     def run(self):
         if pygame is None:
@@ -33,7 +50,7 @@ class CompetitiveGameGUI:
         pygame.display.set_caption('Sokoban Duel - Multi-Agent Arena')
         clock = pygame.time.Clock()
         running = True
-        
+
         while running:
             now = pygame.time.get_ticks()
             for event in pygame.event.get():
@@ -47,10 +64,8 @@ class CompetitiveGameGUI:
                     elif event.key in (pygame.K_RIGHT, pygame.K_l):
                         self.step_forward()
                     elif event.key == pygame.K_r:
-                        from ..competitive.state import initial_state
-                        self.state = initial_state(self.board)
-                        self.paused = True
-            
+                        self.reset_match()
+
             # Step match automatically when unpaused
             if not self.paused and self.state.step < self.game.step_limit:
                 if now - self.last_step_time >= self.step_delay_ms:
