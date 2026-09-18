@@ -1,0 +1,5 @@
+# Oral defense notes
+
+A state is `(player, box_positions)`; walls and goals are static. Hashability lets the graph search detect duplicate states. UCS uses `g(n)` and is optimal with unit costs. A* uses `g(n)+h(n)`; the heuristic is not Manhattan or Euclidean: it is wall-aware reverse-push distance plus one-to-one matching. Relaxation removes constraints, so it should not require more pushes than the real puzzle; each push costs at least one action. Consistency is checked edge by edge.
+
+Expanded nodes measure search work; frontier maximum approximates peak active search space. Empirical runtime is machine-dependent and is not a Big-O claim. Deadlock pruning uses only boxes with no relaxed route to any goal. Replay stores solution states, so backward movement does not re-search. Competitive agents choose simultaneously from the same state; conservative resolution prevents collisions. Ownership records the agent that most recently completed a goal. Deadline checks use a monotonic performance clock and a sub-1000ms budget.

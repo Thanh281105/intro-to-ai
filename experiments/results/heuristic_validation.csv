@@ -1,0 +1,4 @@
+map,states_tested,admissibility_violations,consistency_edges,consistency_violations,maximum_violation
+easy_01.txt,30,0,99,0,0
+medium_01.txt,30,0,101,0,0
+hard_01.txt,30,0,104,0,0
