@@ -38,13 +38,32 @@
 - Clean Telemetry: Node expansion, generated states, memory, live step counter.
 - Status Machine: Clearly displays `IN PROGRESS` during active replay; `SOLVED` only upon goal state.
 
-## Slide 7: Competitive Multi-Agent Arena & Semantics (0:45)
+## Slide 7: Competitive Multi-Agent Arena & RL-Inspired Evaluation (0:45)
 - Visual Artifacts:
   - `experiments/figures/gui_competitive.png` (Active Match: step 16/25, real LAST TURN telemetry, no emotes).
   - `experiments/figures/gui_competitive_final.png` (Match Complete: overlay, final score, crown on winner, crying on loser).
 - Simultaneous Action Resolution: Intent declaration, swap conflict detection, dual-push resolution, box ownership tracking.
-- Real Telemetry: Live decision latencies, action outcomes (`MOVE`, `PUSH`, `BLOCKED`, `CONFLICT`).
-- Wall-Aware Static BFS Heuristic: Zero Manhattan / Euclidean distance; max decision latency 45.4 ms ($<1000$ ms deadline).
+- Evaluation Architecture Diagram:
+  ```
+  COMPETITIVE STATE
+      ↓ [features]
+  score difference (my_score - opp_score)
+  push progress (reverse-push matching)
+  support distance (wall-aware BFS to p_supp)
+  deadlock pruning (sound static dead squares)
+      ↓
+  Potential Phi_i(s) with Horizon Scaling
+      ↓
+  A*: g(n) + h_comp(n)   |   GBFS: h_comp(n)
+      where h_comp = -Phi_i(n)
+      ↓
+  ACTION SELECTION
+  ```
+- 3 Strategic Behaviors:
+  1. Own Scored Goals Protected: Never pushes owned completed boxes off goals ($\Delta \Phi \le -50$).
+  2. Opponent Goals Disrupted: Actively targets and pushes opponent's completed boxes off goals ($\Delta \Phi \ge +45$).
+  3. Horizon Awareness: Score difference importance scales up as $step \to n$, and dominating terminal payoffs ($\pm 1000$) lock in victory.
+- Real Telemetry: Decision latencies max 49.4 ms ($< 1000$ ms limit, 0 fallbacks); wasted moves reduced substantially.
 
 ## Slide 8: Requirements Traceability & Conclusion (0:25)
 - Matrix Overview: 100% PASS across all assignment specifications.

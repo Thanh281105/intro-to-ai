@@ -6,21 +6,29 @@ from .renderer import competitive_scene
 from ..competitive.game import CompetitiveGame
 
 class CompetitiveGameGUI:
-    def __init__(self, board, game):
+    def __init__(self, board, game, show_evaluation: bool = False):
         self.board = board
         self.game = game
         self.state = game.state
         self.paused = False
         self.step_delay_ms = 400
         self.last_step_time = 0
+        self.show_evaluation = show_evaluation
 
     def render(self, surface):
         names = tuple(getattr(a, 'name', f'Agent {i+1}') for i, a in enumerate(self.game.agents))
         last_turn = None
+        eval_info = None
         if hasattr(self.game, 'turn_history') and self.game.turn_history:
             step_idx = self.state.step
             if 0 < step_idx <= len(self.game.turn_history):
                 last_turn = self.game.turn_history[step_idx - 1]
+
+        if self.show_evaluation and self.game.agents:
+            a1_eval = getattr(self.game.agents[0], 'last_evaluation', None)
+            if a1_eval and 'phi' in a1_eval:
+                val = a1_eval['phi']
+                eval_info = f"{val:+.1f}"
 
         competitive_scene(
             surface,
@@ -30,6 +38,8 @@ class CompetitiveGameGUI:
             agent_names=names,
             last_turn=last_turn,
             paused=self.paused,
+            show_evaluation=self.show_evaluation,
+            eval_info=eval_info,
         )
 
     def step_forward(self):

@@ -975,7 +975,7 @@ def get_match_emotes_and_standing(s1: int, s2: int, is_finished: bool):
             return None, None, "Tied Match", ACCENT_AMBER
 
 
-def competitive_scene(surface, board, state, step_limit, agent_names=('A*', 'GBFS'), last_turn=None, paused=True):
+def competitive_scene(surface, board, state, step_limit, agent_names=('A*', 'GBFS'), last_turn=None, paused=True, show_evaluation=False, eval_info=None):
     width, height = surface.get_size()
     surface.fill(BG_DARK)
     
@@ -1160,6 +1160,8 @@ def competitive_scene(surface, board, state, step_limit, agent_names=('A*', 'GBF
         rounded(surface, pygame.Rect(px + 14, res_y, pw - 28, 36), CARD_HEADER, radius=6)
         text(surface, "RESOLUTION:", (px + 24, res_y + 18), size=10, color=TEXT_MUTED, bold=True, align="midleft")
         text(surface, str(last_turn.resolution_summary), (px + pw - 24, res_y + 18), size=11, color=ACCENT_AMBER, bold=True, align="midright")
+        if show_evaluation and eval_info:
+            text(surface, f"Evaluation: {eval_info}", (px + 24, res_y + 30), size=9, color=ACCENT_CYAN, bold=True, align="midleft")
     else:
         text(surface, "MATCH START — AWAITING FIRST MOVE", (px + pw // 2, c3_y + 90), size=11, color=TEXT_DIM, bold=True, align="center")
 

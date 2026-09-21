@@ -16,11 +16,17 @@ class CompetitiveGame:
             return self.state
 
         t0 = time.perf_counter_ns()
-        a1 = self.agents[0].choose_action(self.state, self.board, 1000)
+        try:
+            a1 = self.agents[0].choose_action(self.state, self.board, 1000, step_limit=self.step_limit)
+        except TypeError:
+            a1 = self.agents[0].choose_action(self.state, self.board, 1000)
         lat1 = (time.perf_counter_ns() - t0) / 1e6
 
         t0 = time.perf_counter_ns()
-        a2 = self.agents[1].choose_action(self.state, self.board, 1000)
+        try:
+            a2 = self.agents[1].choose_action(self.state, self.board, 1000, step_limit=self.step_limit)
+        except TypeError:
+            a2 = self.agents[1].choose_action(self.state, self.board, 1000)
         lat2 = (time.perf_counter_ns() - t0) / 1e6
 
         self.state, turn_rec = resolve_with_turn(self.state, a1, a2, self.board, lat1, lat2)

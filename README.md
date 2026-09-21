@@ -135,9 +135,9 @@ PYTHONPATH=src python3 scripts/run_gui.py --map maps/example_map.txt --algorithm
 
 ---
 
-### G. Competitive CLI
+### G. Competitive CLI with RL-Inspired Value Evaluation
 
-Runs headless simulation between Agent 1 (A*) and Agent 2 (GBFS) and prints final scores and winner:
+Runs headless simulation between Agent 1 (A*) and Agent 2 (GBFS) using the RL-inspired state potential function $\Phi_i(s)$ and prints final scores and winner:
 
 #### Windows PowerShell:
 ```powershell
@@ -145,10 +145,18 @@ $env:PYTHONPATH="src"
 python scripts/run_competitive.py --map maps/competitive_01.txt --steps 25
 ```
 
+#### Inspect Live Value-Function Breakdown (`--show-evaluation`):
+```powershell
+$env:PYTHONPATH="src"
+python scripts/run_competitive.py --map maps/competitive_01.txt --steps 25 --show-evaluation
+```
+
 #### macOS / Linux:
 ```bash
-PYTHONPATH=src python3 scripts/run_competitive.py --map maps/competitive_01.txt --steps 25
+PYTHONPATH=src python3 scripts/run_competitive.py --map maps/competitive_01.txt --steps 25 --show-evaluation
 ```
+
+See [docs/competitive_evaluation.md](docs/competitive_evaluation.md) for full mathematical formulation, reward shaping interpretation, and empirical before/after analysis.
 
 ---
 
@@ -172,6 +180,7 @@ PYTHONPATH=src python3 scripts/run_competitive_gui.py --map maps/competitive_01.
 - `RIGHT ARROW` / `L`: Advance 1 turn.
 - `R`: Reset match to start.
 - `ESC`: Exit application.
+- Optional flag `--show-evaluation`: Displays small developer evaluation line (`Evaluation: +54.0`).
 
 ---
 
@@ -200,7 +209,27 @@ PYTHONPATH=src python3 scripts/run_competitive_gui.py --map maps/competitive_01.
 
 ---
 
-### J. Benchmark UCS vs A*
+### J. Compare New RL-Inspired vs Old Baseline Evaluator
+
+Both the new RL-inspired potential evaluator and the old single-agent reverse-push baseline are fully preserved and selectable via `--evaluator {new,old}`:
+
+```powershell
+# Run with NEW RL-inspired evaluator (default):
+python scripts/run_competitive_gui.py --map maps/competitive_02.txt --steps 25 --evaluator new
+
+# Run with OLD baseline evaluator for direct side-by-side comparison:
+python scripts/run_competitive_gui.py --map maps/competitive_02.txt --steps 25 --evaluator old
+```
+
+**Available Competitive Maps**:
+- `maps/competitive_01.txt`: Symmetric 4-goal dual arena (mirror symmetry).
+- `maps/competitive_02.txt`: Central contested box arena featuring dynamic point disruption & theft (`Situation 1 & 2`).
+- `maps/competitive_03.txt`: Asymmetric tactical arena featuring decisive A* victory ($2 - 0$).
+- `maps/competitive_04.txt`: Counter-attack arena featuring decisive GBFS victory ($2 - 1$).
+
+---
+
+### K. Benchmark UCS vs A*
 
 Runs the rigorous two-phase benchmark (timing with `tracemalloc` OFF across 5 measured runs; memory with `tracemalloc` ON separately):
 
@@ -218,7 +247,7 @@ PYTHONPATH=src python3 scripts/benchmark.py
 
 ---
 
-### K. Heuristic Validation
+### L. Heuristic Validation
 
 Empirically validates admissibility ($h \le h^*$) and consistency/monotonicity ($h(s) \le 1 + h(s')$) across reachable states:
 
@@ -236,7 +265,7 @@ PYTHONPATH=src python3 scripts/validate_heuristic.py
 
 ---
 
-### L. Competitive-Agent Benchmark
+### M. Competitive-Agent Benchmark
 
 Evaluates decision latencies and scores across all maps for horizons $n \in \{10, 25, 50\}$, verifying the $<1000$ ms deadline:
 
@@ -254,7 +283,7 @@ PYTHONPATH=src python3 scripts/benchmark_agents.py
 
 ---
 
-### M. Regenerate Figures
+### N. Regenerate Figures
 
 Regenerates grayscale-friendly presentation charts from `benchmark_summary.csv`:
 
@@ -275,7 +304,7 @@ PYTHONPATH=src python3 scripts/generate_figures.py
 
 ---
 
-### N. Regenerate GUI Screenshots
+### O. Regenerate GUI Screenshots
 
 Generates authentic offscreen screenshots directly from real gameplay histories:
 
@@ -296,7 +325,7 @@ SDL_VIDEODRIVER=dummy PYTHONPATH=src python3 scripts/render_screenshots.py
 
 ---
 
-### O. Final Verification
+### P. Final Verification
 
 Runs end-to-end verification proving both UCS and A* solve all benchmark maps, produce identical optimal costs, and generate strictly legal replayable plans:
 
@@ -313,7 +342,7 @@ PYTHONPATH=src python3 scripts/final_verify.py
 
 ---
 
-### P. Submission Packaging
+### Q. Submission Packaging
 
 Generates a zip archive conforming to the assignment directory standard:
 

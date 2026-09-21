@@ -73,8 +73,12 @@ def test_unsolvable_game_status_and_rendering():
     game.render(surf)
     assert surf.get_size() == (1280, 760)
     pygame.quit()
+    from sokoban.gui.renderer import clear_caches
+    clear_caches()
 
 def test_offscreen_competitive_renderer_with_real_history():
+    from sokoban.gui.renderer import clear_caches
+    clear_caches()
     pygame.init()
     root = Path(__file__).resolve().parents[1]
     b = SokobanMap.from_file(root / 'maps/competitive_01.txt')
@@ -89,3 +93,5 @@ def test_offscreen_competitive_renderer_with_real_history():
     gui_comp.render(surf)
     assert surf.get_size() == (1280, 760)
     pygame.quit()
+    clear_caches()
+

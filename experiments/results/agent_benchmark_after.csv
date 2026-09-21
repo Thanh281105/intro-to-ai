@@ -1,0 +1,16 @@
+map,step_limit,agent_1_score,agent_2_score,winner,agent_1_avg_latency_ms,agent_1_med_latency_ms,agent_1_max_latency_ms,agent_2_avg_latency_ms,agent_2_med_latency_ms,agent_2_max_latency_ms,agent_1_deadline_fallbacks,agent_2_deadline_fallbacks,boxes_completed,agent_1_useful_pushes,agent_2_useful_pushes,agent_1_wasted_moves,agent_2_wasted_moves
+competitive_01.txt,10,1,1,tie,37.103,34.372,48.283,29.916,29.667,38.436,0,0,2,1,1,0,0
+competitive_01.txt,25,2,2,tie,9.667,10.155,36.593,6.105,5.84,29.145,0,0,4,2,2,5,5
+competitive_01.txt,50,2,2,tie,5.846,6.793,13.145,3.454,4.22,7.158,0,0,4,2,2,5,5
+easy_01.txt,10,0,0,tie,1.957,1.573,3.255,1.074,0.713,2.131,0,0,0,0,0,8,8
+easy_01.txt,25,0,0,tie,1.056,1.339,1.752,0.529,0.388,1.144,0,0,0,0,0,23,23
+easy_01.txt,50,0,0,tie,0.574,0.045,2.262,0.416,0.3,0.855,0,0,0,0,0,48,48
+example_map.txt,10,2,0,agent_1,23.461,11.54,105.566,0.13,0.144,0.199,0,0,3,2,0,1,0
+example_map.txt,25,3,0,agent_1,4.376,0.457,12.736,0.107,0.074,0.177,0,0,4,5,0,1,0
+example_map.txt,50,4,0,agent_1,2.757,1.599,12.369,0.074,0.056,0.421,0,0,5,6,0,2,0
+hard_01.txt,10,1,0,agent_1,17.612,21.19,22.609,14.433,16.274,19.073,0,0,1,3,0,3,3
+hard_01.txt,25,1,0,agent_1,4.614,1.723,11.469,2.781,0.326,10.95,0,0,1,3,0,18,18
+hard_01.txt,50,1,0,agent_1,6.525,5.61,22.617,1.718,0.29,12.192,0,0,1,3,0,43,43
+medium_01.txt,10,0,0,tie,24.479,20.459,42.514,13.753,8.192,47.991,0,0,0,1,0,6,6
+medium_01.txt,25,0,0,tie,5.921,0.465,20.801,2.944,0.248,11.409,0,0,0,1,0,21,21
+medium_01.txt,50,0,0,tie,2.471,0.064,13.155,1.143,0.065,6.424,0,0,0,1,0,46,46
