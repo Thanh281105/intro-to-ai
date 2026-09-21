@@ -73,8 +73,8 @@ We obtain the exact search formulations:
 Empirically tuned values selected from 12 staged tuning trials on dedicated tuning maps:
 
 $$\begin{aligned}
-W_{\text{SCORE}} &= 50.0 \\
-W_{\text{PUSH}} &= 5.0 \\
+W_{\text{SCORE}} &= 30.0 \\
+W_{\text{PUSH}} &= 3.0 \\
 W_{\text{ROUTE}} &= 2.0 \\
 \text{STEP\_PENALTY} &= -1.0 \\
 \text{TERMINAL\_WIN} &= +1000.0 \\
@@ -89,11 +89,11 @@ W_{\text{ROUTE}} &= 2.0 \\
 | **Useless movement** | $\text{SuppDist} \ge \text{old}$, $\text{ScoreDiff} = \text{old}$ | $\le 0.0$ | $\le -1.0$ | Penalizes wandering, stalling, or pointless corridor steps |
 | **Move toward useful support** | $\Delta \text{SuppDist} = -1.0$ | $+2.0$ | $+1.0$ | Actively guides player toward the optimal pushing square |
 | **Move away from support** | $\Delta \text{SuppDist} = +1.0$ | $-2.0$ | $-3.0$ | Strongly discourages retreating from active push locations |
-| **Useful push (reduces matching cost)** | $\Delta \text{PushCost} = -1.0$ | $+5.0$ | $+4.0$ | Rewards advancing boxes toward available targets |
-| **Harmful push (increases matching cost)** | $\Delta \text{PushCost} \ge +1.0$ | $\le -5.0$ | $\le -6.0$ | Prevents pushing boxes away from reachable goals |
-| **Complete owned goal** | $\Delta \text{ScoreDiff} = +1$, $\Delta \text{PushCost} \le -1$ | $\ge +50.0$ | $\ge +44.0$ to $+54.0$ | Massive incentive to place boxes into designated goals |
-| **Lose own completed box** | $\Delta \text{ScoreDiff} = -1$, $\Delta \text{PushCost} \ge +1$ | $\le -50.0$ | $\le -56.0$ | Strictly forbids knocking own scored boxes off goals |
-| **Remove opponent completed box** | $\Delta \text{ScoreDiff} = +1$ (opponent loses point) | $+45.0$ to $+50.0$ | $+44.0$ to $+49.0$ | Aggressively targets and disrupts opponent-owned goals |
+| **Useful push (reduces matching cost)** | $\Delta \text{PushCost} = -1.0$ | $+3.0$ | $+2.0$ | Rewards advancing boxes toward available targets |
+| **Harmful push (increases matching cost)** | $\Delta \text{PushCost} \ge +1.0$ | $\le -3.0$ | $\le -4.0$ | Prevents pushing boxes away from reachable goals |
+| **Complete owned goal** | $\Delta \text{ScoreDiff} = +1$, $\Delta \text{PushCost} \le -1$ | $\ge +30.0$ | $\ge +22.0$ to $+32.0$ | Massive incentive to place boxes into designated goals |
+| **Lose own completed box** | $\Delta \text{ScoreDiff} = -1$, $\Delta \text{PushCost} \ge +1$ | $\le -30.0$ | $\le -34.0$ | Strongly penalizes knocking own scored boxes off goals |
+| **Remove opponent completed box** | $\Delta \text{ScoreDiff} = +1$ (opponent loses point) | $+27.0$ to $+30.0$ | $+26.0$ to $+29.0$ | Aggressively targets and disrupts opponent-owned goals |
 | **Static deadlock** | Target cell is sound unpushable corner | $-\infty$ | N/A (Pruned) | Search branch pruned immediately via `deadlock.py` |
 | **Terminal Win ($step \ge n$)** | $\text{score\_diff} > 0$ at horizon | $+1000.0$ | Dominant positive | Dominates all intermediate heuristic approximations |
 | **Terminal Loss ($step \ge n$)** | $\text{score\_diff} < 0$ at horizon | $-1000.0$ | Dominant negative | Avoids defeat at all costs near the end of the game |

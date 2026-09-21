@@ -45,7 +45,7 @@ export PYTHONPATH=src
 
 ### B. Run All Unit & Integration Tests
 
-Executes the complete test suite (32 tests covering void isolation, push semantics, A* equivalence, non-geometric heuristics, conflict resolution, deadlines, GUI state machine, and turn telemetry):
+Executes the complete test suite (47 tests covering void isolation, push semantics, A* equivalence, non-geometric heuristics, conflict resolution, deadlines, GUI state machine, turn telemetry, RL reward shaping, and competitive evaluation situations):
 
 #### Windows PowerShell:
 ```powershell
@@ -267,19 +267,26 @@ PYTHONPATH=src python3 scripts/validate_heuristic.py
 
 ### M. Competitive-Agent Benchmark
 
-Evaluates decision latencies and scores across all maps for horizons $n \in \{10, 25, 50\}$, verifying the $<1000$ ms deadline:
+Evaluates decision latencies and scores across all 8 maps for horizons $n \in \{10, 25, 50\}$, verifying the $<1000$ ms deadline:
 
 #### Windows PowerShell:
 ```powershell
 $env:PYTHONPATH="src"
+# Benchmark new evaluator:
 python scripts/benchmark_agents.py
+
+# Benchmark old baseline evaluator:
+python scripts/benchmark_agents.py --evaluator old --output agent_benchmark_before.csv
+
+# Comparative run generating both before and after CSVs cleanly:
+python scripts/benchmark_agents.py --compare-evaluators
 ```
 
 #### macOS / Linux:
 ```bash
-PYTHONPATH=src python3 scripts/benchmark_agents.py
+PYTHONPATH=src python3 scripts/benchmark_agents.py --compare-evaluators
 ```
-*Outputs: `experiments/results/agent_benchmark.csv`.*
+*Outputs: `experiments/results/agent_benchmark_before.csv`, `experiments/results/agent_benchmark_after.csv`, and `experiments/results/agent_benchmark.csv`.*
 
 ---
 

@@ -23,5 +23,6 @@ Audit Status Ratings: **PASS**, **PARTIAL**, **BLOCKED**, **FAIL**.
 | **Competitive GUI Semantics** | Emotes strictly disabled during active match; crown/crying icon only at step >= n; clean scoreboard hierarchy; compact ownership key | **PASS** | Verified in `test_winner_loser_emotes_active_vs_final_invariants`. Authentic screenshots captured in `gui_competitive.png` (active, no emotes) and `gui_competitive_final.png` (final, crown/crying, overlay). |
 | **Real LAST TURN Telemetry** | Genuine previous-turn action, outcome (MOVE/PUSH/BLOCKED/CONFLICT), latency in ms | **PASS** | Implemented via `TurnRecord` in `CompetitiveGame.turn_history`; verified in `test_turn_history_telemetry`. |
 | **Match Complete Overlay** | Modal overlay when step >= n displaying final score, winner callout, and replay controls | **PASS** | Implemented in `renderer.py` and visually verified in `gui_competitive_final.png`. |
-| **Comprehensive Test Suite** | 32 comprehensive pytest unit and integration tests | **PASS** | `python -m pytest tests -v` executed with **32 passed, 0 failed**. |
+| **Comprehensive Test Suite** | 47 comprehensive pytest unit and integration tests | **PASS** | `python -m pytest tests -v` executed with **47 passed, 0 failed**. |
 | **Submission Packaging Script** | Clean bundle generation according to assignment guidelines | **PASS** | `scripts/package_submission.py` tested and functional. |
+

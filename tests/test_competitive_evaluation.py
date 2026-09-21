@@ -83,8 +83,8 @@ def test_F_completing_a_box_strong_positive(comp_map):
     s_after = ((2, 3), boxes_after, (((2, 2), 1),), 1)
 
     r_complete = ev.transition_reward(s_before, s_after, opp_pos=opp_pos, player_id=1, step_limit=25)
-    # Score gained (+50) + push reduced (+5) - step penalty (-1) - route to next target (-10) = +44 to +45
-    assert r_complete >= 40.0, f"Expected strong completion reward >= 40.0, got {r_complete}"
+    # Score gained (+30) + push reduced (+3) - step penalty (-1) - route to next target (-9.4) = +22.6
+    assert r_complete >= 20.0, f"Expected strong completion reward >= 20.0, got {r_complete}"
 
 def test_G_losing_own_completed_box_strong_negative(comp_map):
     """G. Losing own completed box: strong negative change (-W_SCORE)."""
@@ -212,4 +212,4 @@ def test_situation_3_horizon_awareness_scales_score_importance(comp_map):
     b2 = ev.breakdown(player_pos=(1, 1), opp_pos=opp_pos, boxes=boxes_with_goal, owners=(((2, 2), 1),), step=24, player_id=1, step_limit=25)
 
     assert b2['score_contrib'] > b1['score_contrib'], "Score contribution must scale up near the horizon"
-    assert b2['score_contrib'] == 74.0 and b1['score_contrib'] == 50.0
+    assert b2['score_contrib'] == 44.4 and b1['score_contrib'] == 30.0

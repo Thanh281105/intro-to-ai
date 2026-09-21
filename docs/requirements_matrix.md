@@ -2,7 +2,7 @@
 
 | Requirement | Exact Expectation | Implementation | Source | Tests | Experimental Evidence | Presentation | Demo | Status |
 |---|---|---|---|---|---|---|---|---|
-| State-space | Static map, void-safe parsing, immutable dynamic state, actions, goal | `map.py`, `state.py`, `problem.py` | Assignment PDF p1-2 | 32 comprehensive tests | Custom solver runs across all maps | Slide 2 | CLI | PASS |
+| State-space | Static map, void-safe parsing, immutable dynamic state, actions, goal | `map.py`, `state.py`, `problem.py` | Assignment PDF p1-2 | 47 comprehensive tests | Custom solver runs across all maps | Slide 2 | CLI | PASS |
 | Assignment Example | Authoritative 8x9 example map solved optimally | `maps/example_map.txt` restored verbatim | Assignment PDF p2 | Test `test_example_map_restored_solvability` | Solved in 34 steps (UCS: 38,405 nodes; A*: 6,616 nodes) | Slide 2 | CLI / GUI | PASS |
 | UCS / A* | Optimal graph search, closed list, duplicate handling, plan verification | `search/common.py`, `ucs.py`, `astar.py` | Assignment PDF p2 | Search and equivalence tests | 48-row benchmark, identical costs on all solvable maps | Slides 3-4 | CLI | PASS |
 | Non-Geometric Heuristic | Reverse-push shortest path + bipartite matching (no Manhattan/Euclidean) | `heuristic.py` with static reachability cache | Assignment PDF p2 | Heuristic goal-zero, admissibility, cache tests | Validation on 90 states & 304 edges: 0 violations | Slide 5 | CLI | PASS |

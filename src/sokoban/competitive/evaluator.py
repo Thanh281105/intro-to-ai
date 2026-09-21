@@ -9,8 +9,8 @@ from ..agents.base import static_distance
 
 @dataclass(frozen=True)
 class CompetitiveWeights:
-    w_score: float = 50.0
-    w_push: float = 5.0
+    w_score: float = 30.0
+    w_push: float = 3.0
     w_route: float = 2.0
     step_penalty: float = -1.0
     terminal_win: float = 1000.0
@@ -82,10 +82,7 @@ class CompetitiveEvaluator:
 
         for b in boxes:
             b_owner = owner_map.get(b, 0)
-
-            # Situation 1: Box is already completed by ME -> Do NOT push it off!
-            if b in self.goals and b_owner == player_id:
-                continue
+            is_own_completed = (b in self.goals and b_owner == player_id)
 
             for action, (dr, dc) in DIRECTIONS.items():
                 dest = (b[0] + dr, b[1] + dc)
@@ -106,9 +103,13 @@ class CompetitiveEvaluator:
                     useful_pushes.append((supp, dest))
                     continue
 
-                # Situation 3: Completing a goal
+                # Situation 3: Completing a goal (or repositioning onto another goal)
                 if dest in self.goals:
                     useful_pushes.append((supp, dest))
+                    continue
+
+                # For own completed box: moving off goal drops score (evaluated softly via score_diff)
+                if is_own_completed:
                     continue
 
                 # Situation 4: Advancing uncompleted box closer to goals
@@ -316,6 +317,11 @@ class CompetitiveEvaluator:
         )
         u = min(1.0, max(0.0, step / step_limit)) if step_limit > 0 else 0.0
         w_score_eff = weights.w_score * (1.0 + weights.horizon_alpha * u)
+        if score_diff > 0 and u > 0.7:
+            w_push_eff = weights.w_push * (1.0 - 0.25 * u)
+        else:
+            w_push_eff = weights.w_push
+
         phi = self.evaluate_phi(
             player_pos, opp_pos, boxes, owners, step, player_id, step_limit, weights
         )
@@ -329,7 +335,7 @@ class CompetitiveEvaluator:
             'score_diff': score_diff,
             'score_contrib': round(w_score_eff * score_diff, 2),
             'push_cost': round(push_cost, 2),
-            'push_contrib': round(-weights.w_push * push_cost, 2),
+            'push_contrib': round(-w_push_eff * push_cost, 2),
             'support_dist': round(support_dist, 2),
             'route_contrib': round(-weights.w_route * support_dist, 2),
             'phi': round(phi, 2),
