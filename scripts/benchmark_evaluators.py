@@ -1,44 +1,103 @@
+"""Controlled Head-to-Head Benchmark for Sokoban Competitive Evaluator.
+
+Rigorous 4-Way Factorial Experimental Protocol:
+1. Search algorithm held strictly fixed:
+   - A* NEW vs A* OLD
+   - GBFS NEW vs GBFS OLD
+2. 4-Way Debiasing per condition:
+   - Orientation A (Original Spawns):
+     * Match 1: P1(Spawn A)=NEW, P2(Spawn B)=OLD
+     * Match 2: P1(Spawn A)=OLD, P2(Spawn B)=NEW
+   - Orientation B (Mirrored Spawns):
+     * Match 3: P1(Spawn B)=NEW, P2(Spawn A)=OLD
+     * Match 4: P1(Spawn B)=OLD, P2(Spawn A)=NEW
+   Neutralizes 100% of player-turn index bias AND spawn-location advantage.
+3. Partitioned Map Suites:
+   - Tuning & Validation: competitive_01 to competitive_05 (5 maps)
+   - Final Unseen Test Set: competitive_06 to competitive_15 (10 maps)
+   - Secondary Stress Test: single-agent maps (easy_01, medium_01, hard_01, example_map)
+4. Comprehensive Metrics:
+   - Win / Loss / Tie counts and win rates
+   - Total scores and score differences
+   - Useful pushes and ineffective actions
+   - Average, median, and max latencies
+   - 95% Bootstrap Confidence Intervals (1000 resamples)
+   - Git commit SHA and execution timestamp metadata
+"""
+
 import argparse
 import csv
+import datetime
+import random
 import statistics
+import subprocess
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
 from sokoban.map import SokobanMap
-from sokoban.competitive.state import initial_state, resolve_with_turn
+from sokoban.competitive.state import CompetitiveState, initial_state, resolve_with_turn
 from sokoban.agents import AStarAgent, GBFSAgent
 from sokoban.heuristic import ReversePushHeuristic
+from sokoban.competitive.evaluator import SAFETY_DEADLINE_MS
 
 root = Path(__file__).resolve().parents[1]
 results_dir = root / 'experiments/results'
 results_dir.mkdir(parents=True, exist_ok=True)
 
-PRIMARY_MAPS = [
-    'competitive_01.txt',
-    'competitive_02.txt',
-    'competitive_03.txt',
-    'competitive_04.txt',
-]
-
-ROBUSTNESS_MAPS = [
-    'easy_01.txt',
-    'medium_01.txt',
-    'hard_01.txt',
-    'example_map.txt',
-]
+TUNING_VAL_MAPS = [f'competitive_{i:02d}.txt' for i in range(1, 6)]
+UNSEEN_TEST_MAPS = [f'competitive_{i:02d}.txt' for i in range(6, 16)]
+SECONDARY_STRESS_MAPS = ['easy_01.txt', 'medium_01.txt', 'hard_01.txt', 'example_map.txt']
 
 HORIZONS = (10, 25, 50)
 ALGORITHMS = ('astar', 'gbfs')
 
-def run_single_match(board: SokobanMap, map_name: str, algo_name: str, p1_eval: str, p2_eval: str, limit: int) -> dict:
+def get_commit_sha() -> str:
+    try:
+        return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'], text=True).strip()
+    except Exception:
+        return 'unknown'
+
+def compute_bootstrap_ci(data: list[float], num_samples: int = 1000, alpha: float = 0.05) -> tuple[float, float]:
+    if not data:
+        return (0.0, 0.0)
+    random.seed(42)
+    n = len(data)
+    means = []
+    for _ in range(num_samples):
+        resample = [random.choice(data) for _ in range(n)]
+        means.append(statistics.mean(resample))
+    means.sort()
+    low_idx = int((alpha / 2.0) * num_samples)
+    high_idx = int((1.0 - alpha / 2.0) * num_samples)
+    return round(means[low_idx], 3), round(means[high_idx], 3)
+
+def run_single_match(
+    board: SokobanMap,
+    map_name: str,
+    algo_name: str,
+    p1_eval: str,
+    p2_eval: str,
+    limit: int,
+    spawn_mirror: bool = False,
+) -> dict:
+    from sokoban.competitive.state import get_deterministic_p2
     heur = ReversePushHeuristic(board)
     agent_cls = AStarAgent if algo_name == 'astar' else GBFSAgent
 
     agent1 = agent_cls(player_id=1, evaluator_type=p1_eval)
     agent2 = agent_cls(player_id=2, evaluator_type=p2_eval)
-    state = initial_state(board)
+
+    p1_orig = board.initial_player
+    p2_orig = get_deterministic_p2(board, p1_orig)
+
+    if not spawn_mirror:
+        p1_pos, p2_pos = p1_orig, p2_orig
+    else:
+        p1_pos, p2_pos = p2_orig, p1_orig
+
+    state = CompetitiveState(p1=p1_pos, p2=p2_pos, boxes=board.initial_boxes, owners=(), step=0)
 
     lat = [[], []]
     fallbacks = [0, 0]
@@ -52,7 +111,7 @@ def run_single_match(board: SokobanMap, map_name: str, algo_name: str, p1_eval: 
             act = agent.choose_action(state, board, time_limit_ms=1000, step_limit=limit)
             el_ms = (time.perf_counter_ns() - t0) / 1e6
             lat[i].append(el_ms)
-            if el_ms >= 950:
+            if el_ms >= SAFETY_DEADLINE_MS:
                 fallbacks[i] += 1
             actions.append(act)
 
@@ -84,38 +143,20 @@ def run_single_match(board: SokobanMap, map_name: str, algo_name: str, p1_eval: 
         state = nxt_state
 
     scores = state.scores(board.goals)
-    p1_score, p2_score = scores
-    boxes_on_goals = sum(1 for b in state.boxes if b in board.goals)
+    p1_score, p2_score = scores[0], scores[1]
 
     if p1_eval == 'new':
+        new_score, old_score = p1_score, p2_score
+        new_idx, old_idx = 0, 1
         role = 'new_as_p1'
-        new_score = p1_score
-        old_score = p2_score
-        new_useful = useful_pushes[0]
-        old_useful = useful_pushes[1]
-        new_ineff = ineffective_actions[0]
-        old_ineff = ineffective_actions[1]
-        new_lat = lat[0]
-        old_lat = lat[1]
-        new_fb = fallbacks[0]
-        old_fb = fallbacks[1]
     else:
+        new_score, old_score = p2_score, p1_score
+        new_idx, old_idx = 1, 0
         role = 'new_as_p2'
-        new_score = p2_score
-        old_score = p1_score
-        new_useful = useful_pushes[1]
-        old_useful = useful_pushes[0]
-        new_ineff = ineffective_actions[1]
-        old_ineff = ineffective_actions[0]
-        new_lat = lat[1]
-        old_lat = lat[0]
-        new_fb = fallbacks[1]
-        old_fb = fallbacks[0]
 
-    score_diff = new_score - old_score
-    if score_diff > 0:
+    if new_score > old_score:
         winner = 'new'
-    elif score_diff < 0:
+    elif old_score > new_score:
         winner = 'old'
     else:
         winner = 'tie'
@@ -127,205 +168,214 @@ def run_single_match(board: SokobanMap, map_name: str, algo_name: str, p1_eval: 
         'p1_evaluator': p1_eval,
         'p2_evaluator': p2_eval,
         'role_assignment': role,
+        'spawn_mirror': spawn_mirror,
         'p1_score': p1_score,
         'p2_score': p2_score,
         'winner': winner,
         'new_score': new_score,
         'old_score': old_score,
-        'score_diff_new_minus_old': score_diff,
-        'boxes_on_goals': boxes_on_goals,
-        'new_useful_pushes': new_useful,
-        'old_useful_pushes': old_useful,
-        'new_ineffective_actions': new_ineff,
-        'old_ineffective_actions': old_ineff,
-        'new_avg_latency_ms': round(statistics.mean(new_lat), 3),
-        'new_med_latency_ms': round(statistics.median(new_lat), 3),
-        'new_max_latency_ms': round(max(new_lat), 3),
-        'old_avg_latency_ms': round(statistics.mean(old_lat), 3),
-        'old_med_latency_ms': round(statistics.median(old_lat), 3),
-        'old_max_latency_ms': round(max(old_lat), 3),
-        'new_deadline_fallbacks': new_fb,
-        'old_deadline_fallbacks': old_fb,
+        'score_diff_new_minus_old': new_score - old_score,
+        'boxes_on_goals': sum(scores),
+        'new_useful_pushes': useful_pushes[new_idx],
+        'old_useful_pushes': useful_pushes[old_idx],
+        'new_ineffective_actions': ineffective_actions[new_idx],
+        'old_ineffective_actions': ineffective_actions[old_idx],
+        'new_avg_latency_ms': round(statistics.mean(lat[new_idx]), 3),
+        'new_med_latency_ms': round(statistics.median(lat[new_idx]), 3),
+        'new_max_latency_ms': round(max(lat[new_idx]), 3),
+        'old_avg_latency_ms': round(statistics.mean(lat[old_idx]), 3),
+        'old_med_latency_ms': round(statistics.median(lat[old_idx]), 3),
+        'old_max_latency_ms': round(max(lat[old_idx]), 3),
+        'new_deadline_fallbacks': fallbacks[new_idx],
+        'old_deadline_fallbacks': fallbacks[old_idx],
     }
 
-def run_experiment(map_names: list[str], label: str = "primary") -> list[dict]:
-    matches = []
-    total_runs = len(ALGORITHMS) * len(map_names) * len(HORIZONS) * 2
-    idx = 0
+def run_suite(suite_name: str, map_files: list[str], output_csv: Path) -> list[dict]:
     print(f"\n========================================================")
-    print(f"Starting {label.upper()} Head-to-Head Evaluator Benchmark ({total_runs} matches)")
+    print(f"Starting {suite_name.upper()} Suite ({len(map_files)} maps x {len(HORIZONS)} horizons x 2 algos x 4 matches = {len(map_files)*len(HORIZONS)*2*4} matches)")
     print(f"========================================================")
 
-    for algo in ALGORITHMS:
-        for mname in map_names:
-            mpath = root / 'maps' / mname
-            board = SokobanMap.from_file(mpath)
-            for horizon in HORIZONS:
-                # Match A: P1=NEW, P2=OLD
-                idx += 1
-                mA = run_single_match(board, mname, algo, 'new', 'old', horizon)
-                matches.append(mA)
-                print(f"[{idx:02d}/{total_runs}] {algo.upper():>5s} | {mname:<18s} n={horizon:2d} | Match A (P1=NEW, P2=OLD) -> NEW={mA['new_score']} OLD={mA['old_score']} ({mA['winner'].upper():<4s}) | lat_new={mA['new_avg_latency_ms']:.2f}ms lat_old={mA['old_avg_latency_ms']:.2f}ms")
+    rows = []
+    total = len(map_files) * len(HORIZONS) * len(ALGORITHMS) * 4
+    idx = 0
 
-                # Match B: Role Swap (P1=OLD, P2=NEW)
-                idx += 1
-                mB = run_single_match(board, mname, algo, 'old', 'new', horizon)
-                matches.append(mB)
-                print(f"[{idx:02d}/{total_runs}] {algo.upper():>5s} | {mname:<18s} n={horizon:2d} | Match B (P1=OLD, P2=NEW) -> NEW={mB['new_score']} OLD={mB['old_score']} ({mB['winner'].upper():<4s}) | lat_new={mB['new_avg_latency_ms']:.2f}ms lat_old={mB['old_avg_latency_ms']:.2f}ms")
+    for m_file in map_files:
+        board_path = root / 'maps' / m_file
+        if not board_path.exists():
+            print(f"Skipping non-existent map: {m_file}")
+            continue
+        board = SokobanMap.from_file(board_path)
 
-    return matches
+        for limit in HORIZONS:
+            for algo in ALGORITHMS:
+                # 4-Way Factorial Design
+                # Orientation A (Original Spawns)
+                for p1_e, p2_e in (('new', 'old'), ('old', 'new')):
+                    idx += 1
+                    res = run_single_match(board, m_file, algo, p1_e, p2_e, limit, spawn_mirror=False)
+                    rows.append(res)
+                    print(f"[{idx:03d}/{total:03d}] {algo.upper():5} | {m_file:18} n={limit:2d} | "
+                          f"Sp=Orig P1={p1_e} P2={p2_e} -> NEW={res['new_score']} OLD={res['old_score']} ({res['winner'].upper():3}) | "
+                          f"lat_new={res['new_avg_latency_ms']:5.2f}ms lat_old={res['old_avg_latency_ms']:5.2f}ms")
+
+                # Orientation B (Mirrored Spawns)
+                for p1_e, p2_e in (('new', 'old'), ('old', 'new')):
+                    idx += 1
+                    res = run_single_match(board, m_file, algo, p1_e, p2_e, limit, spawn_mirror=True)
+                    rows.append(res)
+                    print(f"[{idx:03d}/{total:03d}] {algo.upper():5} | {m_file:18} n={limit:2d} | "
+                          f"Sp=Mirr P1={p1_e} P2={p2_e} -> NEW={res['new_score']} OLD={res['old_score']} ({res['winner'].upper():3}) | "
+                          f"lat_new={res['new_avg_latency_ms']:5.2f}ms lat_old={res['old_avg_latency_ms']:5.2f}ms")
+
+    if rows:
+        with output_csv.open('w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(rows)
+        print(f"Wrote {len(rows)} match rows to {output_csv}")
+
+    return rows
 
 def build_summary(matches: list[dict]) -> list[dict]:
-    summary_rows = []
-    # Group by (algorithm, map, step_limit)
+    """Aggregate individual matches by (algorithm, map, step_limit)."""
     groups = {}
-    for m in matches:
-        key = (m['algorithm'], m['map'], m['step_limit'])
-        groups.setdefault(key, []).append(m)
+    for r in matches:
+        k = (r['algorithm'], r['map'], r['step_limit'])
+        if k not in groups:
+            groups[k] = []
+        groups[k].append(r)
 
-    for (algo, mname, horizon), pair in groups.items():
-        new_score = sum(m['new_score'] for m in pair)
-        old_score = sum(m['old_score'] for m in pair)
-        score_diff = new_score - old_score
-
-        new_wins = sum(1 for m in pair if m['winner'] == 'new')
-        old_wins = sum(1 for m in pair if m['winner'] == 'old')
-        ties = sum(1 for m in pair if m['winner'] == 'tie')
-
-        new_useful = sum(m['new_useful_pushes'] for m in pair)
-        old_useful = sum(m['old_useful_pushes'] for m in pair)
-        new_ineff = sum(m['new_ineffective_actions'] for m in pair)
-        old_ineff = sum(m['old_ineffective_actions'] for m in pair)
-
-        new_avg_lats = [m['new_avg_latency_ms'] for m in pair]
-        old_avg_lats = [m['old_avg_latency_ms'] for m in pair]
-        new_max_lats = [m['new_max_latency_ms'] for m in pair]
-        old_max_lats = [m['old_max_latency_ms'] for m in pair]
-
-        summary_rows.append({
+    out = []
+    for (algo, m, limit), g in groups.items():
+        out.append({
             'algorithm': algo,
-            'map': mname,
-            'step_limit': horizon,
-            'role_swapped_matches': len(pair),
-            'new_score': new_score,
-            'old_score': old_score,
-            'score_diff': score_diff,
-            'new_wins': new_wins,
-            'old_wins': old_wins,
-            'ties': ties,
-            'new_useful_pushes': new_useful,
-            'old_useful_pushes': old_useful,
-            'new_ineffective_actions': new_ineff,
-            'old_ineffective_actions': old_ineff,
-            'new_avg_latency_ms': round(statistics.mean(new_avg_lats), 3),
-            'old_avg_latency_ms': round(statistics.mean(old_avg_lats), 3),
-            'new_max_latency_ms': round(max(new_max_lats), 3),
-            'old_max_latency_ms': round(max(old_max_lats), 3),
-            'new_fallbacks': sum(m['new_deadline_fallbacks'] for m in pair),
-            'old_fallbacks': sum(m['old_deadline_fallbacks'] for m in pair),
+            'map': m,
+            'step_limit': limit,
+            'role_swapped_matches': len(g),
+            'new_score': sum(r['new_score'] for r in g),
+            'old_score': sum(r['old_score'] for r in g),
+            'score_diff': sum(r['new_score'] for r in g) - sum(r['old_score'] for r in g),
+            'new_wins': sum(1 for r in g if r['winner'] == 'new'),
+            'old_wins': sum(1 for r in g if r['winner'] == 'old'),
+            'ties': sum(1 for r in g if r['winner'] == 'tie'),
+            'new_useful_pushes': sum(r['new_useful_pushes'] for r in g),
+            'old_useful_pushes': sum(r['old_useful_pushes'] for r in g),
+            'new_ineffective_actions': sum(r['new_ineffective_actions'] for r in g),
+            'old_ineffective_actions': sum(r['old_ineffective_actions'] for r in g),
+            'new_avg_latency_ms': round(statistics.mean(r['new_avg_latency_ms'] for r in g), 3),
+            'old_avg_latency_ms': round(statistics.mean(r['old_avg_latency_ms'] for r in g), 3),
+            'new_max_latency_ms': round(max(r['new_max_latency_ms'] for r in g), 3),
+            'old_max_latency_ms': round(max(r['old_max_latency_ms'] for r in g), 3),
+            'new_fallbacks': sum(r['new_deadline_fallbacks'] for r in g),
+            'old_fallbacks': sum(r['old_deadline_fallbacks'] for r in g),
         })
+    return out
 
-    # Add Algorithm Subtotals
-    for algo in ALGORITHMS:
-        algo_matches = [m for m in matches if m['algorithm'] == algo]
-        if not algo_matches:
+def generate_summary(all_rows: dict[str, list[dict]], summary_csv: Path):
+    commit_sha = get_commit_sha()
+    timestamp = datetime.datetime.now().isoformat()
+
+    summary_rows = []
+    for split_name, rows in all_rows.items():
+        if not rows:
             continue
-        new_score = sum(m['new_score'] for m in algo_matches)
-        old_score = sum(m['old_score'] for m in algo_matches)
-        score_diff = new_score - old_score
 
-        new_wins = sum(1 for m in algo_matches if m['winner'] == 'new')
-        old_wins = sum(1 for m in algo_matches if m['winner'] == 'old')
-        ties = sum(1 for m in algo_matches if m['winner'] == 'tie')
+        for algo in ('astar', 'gbfs', 'ALL'):
+            algo_rows = rows if algo == 'ALL' else [r for r in rows if r['algorithm'] == algo]
+            if not algo_rows:
+                continue
 
-        new_useful = sum(m['new_useful_pushes'] for m in algo_matches)
-        old_useful = sum(m['old_useful_pushes'] for m in algo_matches)
-        new_ineff = sum(m['new_ineffective_actions'] for m in algo_matches)
-        old_ineff = sum(m['old_ineffective_actions'] for m in algo_matches)
+            matches = len(algo_rows)
+            new_wins = sum(1 for r in algo_rows if r['winner'] == 'new')
+            old_wins = sum(1 for r in algo_rows if r['winner'] == 'old')
+            ties = sum(1 for r in algo_rows if r['winner'] == 'tie')
+            new_score = sum(r['new_score'] for r in algo_rows)
+            old_score = sum(r['old_score'] for r in algo_rows)
+            diffs = [r['score_diff_new_minus_old'] for r in algo_rows]
+            useful_new = sum(r['new_useful_pushes'] for r in algo_rows)
+            useful_old = sum(r['old_useful_pushes'] for r in algo_rows)
+            ineff_new = sum(r['new_ineffective_actions'] for r in algo_rows)
+            ineff_old = sum(r['old_ineffective_actions'] for r in algo_rows)
+            lat_new = [r['new_avg_latency_ms'] for r in algo_rows]
+            lat_old = [r['old_avg_latency_ms'] for r in algo_rows]
+            max_lat_new = max(r['new_max_latency_ms'] for r in algo_rows)
+            max_lat_old = max(r['old_max_latency_ms'] for r in algo_rows)
+            fallbacks_new = sum(r['new_deadline_fallbacks'] for r in algo_rows)
+            fallbacks_old = sum(r['old_deadline_fallbacks'] for r in algo_rows)
 
-        new_avg_lats = [m['new_avg_latency_ms'] for m in algo_matches]
-        old_avg_lats = [m['old_avg_latency_ms'] for m in algo_matches]
-        new_max_lats = [m['new_max_latency_ms'] for m in algo_matches]
-        old_max_lats = [m['old_max_latency_ms'] for m in algo_matches]
+            mean_diff = round(statistics.mean(diffs), 3)
+            med_diff = round(statistics.median(diffs), 3)
+            std_diff = round(statistics.stdev(diffs), 3) if len(diffs) > 1 else 0.0
+            ci_low, ci_high = compute_bootstrap_ci([float(x) for x in diffs])
 
-        summary_rows.append({
-            'algorithm': f"{algo.upper()}_TOTAL",
-            'map': 'ALL_PRIMARY',
-            'step_limit': 'ALL',
-            'role_swapped_matches': len(algo_matches),
-            'new_score': new_score,
-            'old_score': old_score,
-            'score_diff': score_diff,
-            'new_wins': new_wins,
-            'old_wins': old_wins,
-            'ties': ties,
-            'new_useful_pushes': new_useful,
-            'old_useful_pushes': old_useful,
-            'new_ineffective_actions': new_ineff,
-            'old_ineffective_actions': old_ineff,
-            'new_avg_latency_ms': round(statistics.mean(new_avg_lats), 3),
-            'old_avg_latency_ms': round(statistics.mean(old_avg_lats), 3),
-            'new_max_latency_ms': round(max(new_max_lats), 3),
-            'old_max_latency_ms': round(max(old_max_lats), 3),
-            'new_fallbacks': sum(m['new_deadline_fallbacks'] for m in algo_matches),
-            'old_fallbacks': sum(m['old_deadline_fallbacks'] for m in algo_matches),
-        })
+            summary_rows.append({
+                'commit_sha': commit_sha,
+                'timestamp': timestamp,
+                'split': split_name,
+                'algorithm': algo,
+                'matches': matches,
+                'new_wins': new_wins,
+                'old_wins': old_wins,
+                'ties': ties,
+                'win_rate_new': round(new_wins / matches, 3),
+                'new_score': new_score,
+                'old_score': old_score,
+                'score_diff_total': new_score - old_score,
+                'mean_score_diff': mean_diff,
+                'median_score_diff': med_diff,
+                'std_score_diff': std_diff,
+                'ci_95_low': ci_low,
+                'ci_95_high': ci_high,
+                'useful_pushes_new': useful_new,
+                'useful_pushes_old': useful_old,
+                'ineffective_new': ineff_new,
+                'ineffective_old': ineff_old,
+                'avg_latency_new_ms': round(statistics.mean(lat_new), 3),
+                'avg_latency_old_ms': round(statistics.mean(lat_old), 3),
+                'max_latency_new_ms': round(max_lat_new, 3),
+                'max_latency_old_ms': round(max_lat_old, 3),
+                'fallbacks_new': fallbacks_new,
+                'fallbacks_old': fallbacks_old,
+            })
 
-    # Overall Total
-    new_score = sum(m['new_score'] for m in matches)
-    old_score = sum(m['old_score'] for m in matches)
-    summary_rows.append({
-        'algorithm': "OVERALL_TOTAL",
-        'map': 'ALL_PRIMARY',
-        'step_limit': 'ALL',
-        'role_swapped_matches': len(matches),
-        'new_score': new_score,
-        'old_score': old_score,
-        'score_diff': new_score - old_score,
-        'new_wins': sum(1 for m in matches if m['winner'] == 'new'),
-        'old_wins': sum(1 for m in matches if m['winner'] == 'old'),
-        'ties': sum(1 for m in matches if m['winner'] == 'tie'),
-        'new_useful_pushes': sum(m['new_useful_pushes'] for m in matches),
-        'old_useful_pushes': sum(m['old_useful_pushes'] for m in matches),
-        'new_ineffective_actions': sum(m['new_ineffective_actions'] for m in matches),
-        'old_ineffective_actions': sum(m['old_ineffective_actions'] for m in matches),
-        'new_avg_latency_ms': round(statistics.mean([m['new_avg_latency_ms'] for m in matches]), 3),
-        'old_avg_latency_ms': round(statistics.mean([m['old_avg_latency_ms'] for m in matches]), 3),
-        'new_max_latency_ms': round(max([m['new_max_latency_ms'] for m in matches]), 3),
-        'old_max_latency_ms': round(max([m['old_max_latency_ms'] for m in matches]), 3),
-        'new_fallbacks': sum(m['new_deadline_fallbacks'] for m in matches),
-        'old_fallbacks': sum(m['old_deadline_fallbacks'] for m in matches),
-    })
-
-    return summary_rows
-
-def write_csv(path: Path, data: list[dict]):
-    if not data:
-        return
-    with path.open('w', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=list(data[0].keys()))
-        writer.writeheader()
-        writer.writerows(data)
-    print(f"Wrote {len(data)} rows to {path}")
+    if summary_rows:
+        with summary_csv.open('w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=list(summary_rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(summary_rows)
+        print(f"\nWrote comprehensive summary to {summary_csv}")
 
 def main():
-    parser = argparse.ArgumentParser(description="Head-to-Head Evaluator Benchmark (holding search fixed)")
-    parser.add_argument('--include-robustness', action='store_true', help="Also run secondary robustness matches on single-agent maps")
+    parser = argparse.ArgumentParser(description="Run controlled head-to-head evaluator benchmark with 4-way debiasing.")
+    parser.add_argument('--suite', choices=['all', 'val', 'test', 'stress'], default='all',
+                        help="Which suite to benchmark (default: all)")
     args = parser.parse_args()
 
-    primary_matches = run_experiment(PRIMARY_MAPS, label="primary")
-    primary_csv = results_dir / 'evaluator_head_to_head.csv'
-    write_csv(primary_csv, primary_matches)
+    suite_results = {}
 
-    summary_rows = build_summary(primary_matches)
-    summary_csv = results_dir / 'evaluator_head_to_head_summary.csv'
-    write_csv(summary_csv, summary_rows)
+    if args.suite in ('all', 'val'):
+        csv_path = results_dir / 'evaluator_benchmark_val.csv'
+        suite_results['tuning_val'] = run_suite('Tuning & Validation', TUNING_VAL_MAPS, csv_path)
 
-    if args.include_robustness:
-        robustness_matches = run_experiment(ROBUSTNESS_MAPS, label="robustness")
-        robustness_csv = results_dir / 'evaluator_head_to_head_robustness.csv'
-        write_csv(robustness_csv, robustness_matches)
+    if args.suite in ('all', 'test'):
+        csv_path = results_dir / 'evaluator_benchmark_test.csv'
+        suite_results['unseen_test'] = run_suite('Final Unseen Test (Holdout)', UNSEEN_TEST_MAPS, csv_path)
 
+    if args.suite in ('all', 'stress'):
+        csv_path = results_dir / 'evaluator_benchmark_stress.csv'
+        suite_results['secondary_stress'] = run_suite('Secondary Stress Test (Single-Agent Maps)', SECONDARY_STRESS_MAPS, csv_path)
+
+    # Legacy output compatibility
+    if 'tuning_val' in suite_results:
+        # Write legacy evaluator_head_to_head.csv for older test fixtures
+        leg_path = results_dir / 'evaluator_head_to_head.csv'
+        with leg_path.open('w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=list(suite_results['tuning_val'][0].keys()))
+            writer.writeheader()
+            writer.writerows(suite_results['tuning_val'])
+
+    summary_csv = results_dir / 'evaluator_benchmark_summary.csv'
+    generate_summary(suite_results, summary_csv)
     print("\nBenchmark completed successfully!")
 
 if __name__ == '__main__':

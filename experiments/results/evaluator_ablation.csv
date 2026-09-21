@@ -1,0 +1,6 @@
+variant,matches,wins,losses,ties,win_rate,variant_score,old_score,score_diff,useful_pushes,ineffective_actions,avg_latency_ms,max_latency_ms,deadline_fallbacks
+Full Potential Evaluator,16,6,2,8,0.375,23,16,7,37,7,19.014,95.235,0
+No Score Difference,16,3,11,2,0.188,13,21,-8,25,6,30.832,160.951,0
+No Support Distance,16,5,2,9,0.312,21,16,5,36,0,4.467,20.657,0
+No Horizon Scaling,16,6,2,8,0.375,23,16,7,37,7,26.293,215.033,0
+No Ownership Logic,16,3,3,10,0.188,21,21,0,25,0,16.302,86.537,0

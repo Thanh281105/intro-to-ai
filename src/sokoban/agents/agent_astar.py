@@ -4,7 +4,15 @@ from itertools import count
 from typing import Optional
 from .base import Agent
 from ..state import DIRECTIONS
-from ..competitive.evaluator import CompetitiveEvaluator, CompetitiveWeights, DEFAULT_WEIGHTS
+from ..competitive.evaluator import (
+    CompetitiveEvaluator,
+    CompetitiveWeights,
+    DEFAULT_WEIGHTS,
+    OldEvaluator,
+    SAFETY_DEADLINE_MS,
+    MAX_SEARCH_DEPTH,
+    MAX_SEARCH_EXPANSIONS,
+)
 
 class AStarAgent(Agent):
     name = 'A*'
@@ -15,23 +23,9 @@ class AStarAgent(Agent):
         self.evaluator_type = evaluator_type
         self.last_evaluation: Optional[dict] = None
 
-    def _eval_h_old(self, state, board, heuristic) -> float:
-        pos, boxes = state
-        box_cost = heuristic.for_boxes(boxes)
-        if box_cost == float('inf'):
-            return float('inf')
-        if boxes:
-            from .base import static_distance
-            min_dist = min(static_distance(board, pos, b) for b in boxes)
-            if min_dist == float('inf'):
-                return float('inf')
-        else:
-            min_dist = 0
-        return float(10 * box_cost + min_dist)
-
     def choose_action(self, state, board, time_limit_ms: int = 1000, step_limit: int = 25) -> str:
-        # Enforce strict internal deadline <= 950ms using high-precision performance counter
-        deadline = time.perf_counter_ns() + int(min(time_limit_ms, 950) * 1e6)
+        # Enforce strict internal safety deadline using high-precision performance counter
+        deadline = time.perf_counter_ns() + int(min(time_limit_ms, SAFETY_DEADLINE_MS) * 1e6)
         my_pos = state.p1 if self.player_id == 1 else state.p2
         opp_pos = state.p2 if self.player_id == 1 else state.p1
 
@@ -45,17 +39,16 @@ class AStarAgent(Agent):
 
         # LEGACY OLD EVALUATION PATH
         if self.evaluator_type == 'old':
-            from ..heuristic import ReversePushHeuristic
-            heuristic = ReversePushHeuristic(board)
+            old_eval = OldEvaluator.get(board)
             serial = count()
             start_state = (my_pos, state.boxes)
-            initial_h = self._eval_h_old(start_state, board, heuristic)
+            initial_h = old_eval.evaluate_h_state(my_pos, state.boxes)
             open_pq = [(initial_h, 0, next(serial), start_state, None, 0)]
             best_g = {start_state: 0}
             best_plan_first_action = None
             best_h_seen = initial_h
-            max_depth = 14
-            max_expansions = 600
+            max_depth = MAX_SEARCH_DEPTH
+            max_expansions = MAX_SEARCH_EXPANSIONS
             expanded = 0
 
             while open_pq:
@@ -65,7 +58,7 @@ class AStarAgent(Agent):
                 if g > best_g.get((cur_pos, cur_boxes), float('inf')):
                     continue
                 expanded += 1
-                cur_h = self._eval_h_old((cur_pos, cur_boxes), board, heuristic)
+                cur_h = old_eval.evaluate_h_state(cur_pos, cur_boxes)
                 if cur_h < best_h_seen and first_action is not None:
                     best_h_seen = cur_h
                     best_plan_first_action = first_action
@@ -90,7 +83,7 @@ class AStarAgent(Agent):
                     ng = g + 1
                     if ng < best_g.get(nxt_state, float('inf')):
                         best_g[nxt_state] = ng
-                        nh = self._eval_h_old(nxt_state, board, heuristic)
+                        nh = old_eval.evaluate_h_state(nxt_pos, nxt_boxes)
                         if nh < float('inf'):
                             fa = first_action if first_action is not None else action
                             heapq.heappush(open_pq, (ng + nh, ng, next(serial), nxt_state, fa, depth + 1))
@@ -116,8 +109,8 @@ class AStarAgent(Agent):
         best_plan_first_action = None
         best_h_seen = initial_h
 
-        max_depth = 14
-        max_expansions = 600
+        max_depth = MAX_SEARCH_DEPTH
+        max_expansions = MAX_SEARCH_EXPANSIONS
         expanded = 0
 
         while open_pq:

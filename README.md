@@ -5,13 +5,23 @@ An end-to-end, release-candidate implementation of classical heuristic search (U
 ---
 
 ## 1. Available Maps
-
-The project includes five verified map configurations:
+ 
+### Single-Agent Benchmark Maps:
 - `maps/easy_01.txt`: Minimal 1-box baseline puzzle (optimal cost: 3).
 - `maps/medium_01.txt`: 2-box corridor puzzle (optimal cost: 7).
 - `maps/hard_01.txt`: Multi-box bottleneck puzzle (optimal cost: 10).
 - `maps/example_map.txt`: **Authoritative assignment benchmark map** restored character-by-character from PDF Page 2 (8x9 grid, 7 boxes, 7 targets; optimal cost: 34).
-- `maps/competitive_01.txt`: Balanced 11x9 two-player competitive arena with symmetrical start positions and contested target zones.
+
+### Competitive Multi-Agent Maps (15 Symmetrical Arenas):
+- **Tuning Set**:
+  - `maps/competitive_01.txt`: Symmetrical 4-goal dual arena (mirror symmetry).
+  - `maps/competitive_02.txt`: Central contested box arena featuring dynamic point disruption & theft (`Situation 1 & 2`).
+  - `maps/competitive_03.txt`: Asymmetric tactical arena featuring decisive A* victory ($2 - 0$).
+- **Holdout Validation Set**:
+  - `maps/competitive_04.txt`: Counter-attack arena featuring decisive GBFS victory ($2 - 1$).
+  - `maps/competitive_05.txt`: Dual chamber with central obstacle wall and 4 contested goals.
+- **Unseen Final Test Set (Holdout)**:
+  - `maps/competitive_06.txt` to `maps/competitive_15.txt`: 10 diverse unseen competitive topologies (crossroads, diamond, twin corridors, fortress, labyrinths, sprint fields). Weights were *never* adjusted on these maps.
 
 ### Recommended Demonstrations:
 - **Single-Agent GUI Replay**: `maps/example_map.txt` with `astar`.
@@ -19,7 +29,8 @@ The project includes five verified map configurations:
 
 ---
 
-## 2. Complete Run-Mode Commands (Modes A – P)
+## 2. Complete Run-Mode Commands (Modes A – T)
+
 
 Below are copy-pasteable execution instructions formatted separately for **Windows PowerShell** and **macOS / Linux (Bash/Zsh)**.
 
@@ -367,27 +378,66 @@ PYTHONPATH=src python3 scripts/package_submission.py --group-id "GROUP01" --stud
 
 ---
 
-### R. Controlled Evaluator Head-to-Head Benchmark
+### R. 4-Way Debiased Evaluator Benchmark
 
-Executes the strictly controlled head-to-head benchmark holding the search algorithm fixed ($A^*$ NEW vs $A^*$ OLD and GBFS NEW vs GBFS OLD) with role-swapped symmetrical pairs across all competitive maps:
+Executes the strictly controlled head-to-head benchmark holding the search algorithm fixed ($A^*$ NEW vs $A^*$ OLD and GBFS NEW vs GBFS OLD) with **4-way factorial debiasing** (Role Swap $\times$ Spawn Mirror):
 
 #### Windows PowerShell:
 ```powershell
 $env:PYTHONPATH="src"
-# Primary 48-match benchmark across 4 competitive maps:
-python scripts/benchmark_evaluators.py
+# Run complete suite (Tuning/Val 120 matches + Unseen Test 240 matches + Stress 96 matches = 456 matches):
+python scripts/benchmark_evaluators.py --suite all
 
-# Include 48 robustness matches across single-agent maps:
-python scripts/benchmark_evaluators.py --include-robustness
+# Run specific suite:
+python scripts/benchmark_evaluators.py --suite test  # Unseen holdout test (competitive_06 to 15)
+python scripts/benchmark_evaluators.py --suite val   # Tuning & validation (competitive_01 to 05)
+python scripts/benchmark_evaluators.py --suite stress# Secondary stress test on single-agent maps
 ```
 
 #### macOS / Linux:
 ```bash
-PYTHONPATH=src python3 scripts/benchmark_evaluators.py --include-robustness
+PYTHONPATH=src python3 scripts/benchmark_evaluators.py --suite all
 ```
-*Outputs: `experiments/results/evaluator_head_to_head.csv`, `experiments/results/evaluator_head_to_head_summary.csv`, and `experiments/results/evaluator_head_to_head_robustness.csv`.*
+*Outputs: `experiments/results/evaluator_benchmark_summary.csv`, `evaluator_benchmark_test.csv`, `evaluator_benchmark_val.csv`, `evaluator_benchmark_stress.csv`.*
 
 ---
+
+### S. Evaluator Ablation Study
+
+Evaluates component contributions (Score difference, Support distance, Horizon scaling, Ownership tracking) against the baseline:
+
+#### Windows PowerShell:
+```powershell
+$env:PYTHONPATH="src"
+python scripts/ablation_study.py
+```
+
+#### macOS / Linux:
+```bash
+PYTHONPATH=src python3 scripts/ablation_study.py
+```
+*Outputs: `experiments/results/evaluator_ablation.csv`.*
+
+---
+
+### T. Principled Weight Tuning
+
+Runs discriminative head-to-head parameter tuning on the dedicated tuning set (`competitive_01` to `03`) and validates on the holdout validation set (`competitive_04` and `05`):
+
+#### Windows PowerShell:
+```powershell
+$env:PYTHONPATH="src"
+python scripts/tune_weights.py
+```
+
+#### macOS / Linux:
+```bash
+PYTHONPATH=src python3 scripts/tune_weights.py
+```
+*Outputs: `experiments/results/reward_weight_tuning.csv`.*
+
+---
+
 
 ## 3. Documentation Index
 

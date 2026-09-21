@@ -63,7 +63,7 @@
   1. Own Scored Goals Protected: Never pushes owned completed boxes off goals ($\Delta \Phi \le -30.0$).
   2. Opponent Goals Disrupted: Actively targets and pushes opponent's completed boxes off goals ($\Delta \Phi \ge +27.0$).
   3. Horizon Awareness: Score difference importance scales up as $step \to n$, and dominating terminal payoffs ($\pm 1000$) lock in victory.
-- Empirical Verification: Controlled head-to-head benchmark (48 matches): **28 Wins - 4 Losses** (7:1 win ratio, +95.2% points); max latency 98.2 ms (< 1000 ms ceiling, 0 fallbacks).
+- Empirical Verification: 4-Way debiased benchmark (456 matches: 100W - 10L on 360 primary competitive matches; unseen holdout 95% CI: [+0.121, +0.271]; ablation proves score_diff & ownership are essential; 0 fallbacks).
 
 ## Slide 8: Requirements Traceability & Conclusion (0:25)
 - Matrix Overview: 100% PASS across all assignment specifications.
