@@ -45,7 +45,7 @@ export PYTHONPATH=src
 
 ### B. Run All Unit & Integration Tests
 
-Executes the complete test suite (47 tests covering void isolation, push semantics, A* equivalence, non-geometric heuristics, conflict resolution, deadlines, GUI state machine, turn telemetry, RL reward shaping, and competitive evaluation situations):
+Executes the complete test suite (56 tests covering void isolation, push semantics, A* equivalence, non-geometric heuristics, conflict resolution, deadlines, GUI state machine, turn telemetry, RL reward shaping, competitive evaluation situations, and controlled head-to-head evaluator benchmarks):
 
 #### Windows PowerShell:
 ```powershell
@@ -57,6 +57,7 @@ pytest -v
 ```bash
 PYTHONPATH=src pytest -v
 ```
+
 
 ---
 
@@ -366,8 +367,31 @@ PYTHONPATH=src python3 scripts/package_submission.py --group-id "GROUP01" --stud
 
 ---
 
+### R. Controlled Evaluator Head-to-Head Benchmark
+
+Executes the strictly controlled head-to-head benchmark holding the search algorithm fixed ($A^*$ NEW vs $A^*$ OLD and GBFS NEW vs GBFS OLD) with role-swapped symmetrical pairs across all competitive maps:
+
+#### Windows PowerShell:
+```powershell
+$env:PYTHONPATH="src"
+# Primary 48-match benchmark across 4 competitive maps:
+python scripts/benchmark_evaluators.py
+
+# Include 48 robustness matches across single-agent maps:
+python scripts/benchmark_evaluators.py --include-robustness
+```
+
+#### macOS / Linux:
+```bash
+PYTHONPATH=src python3 scripts/benchmark_evaluators.py --include-robustness
+```
+*Outputs: `experiments/results/evaluator_head_to_head.csv`, `experiments/results/evaluator_head_to_head_summary.csv`, and `experiments/results/evaluator_head_to_head_robustness.csv`.*
+
+---
+
 ## 3. Documentation Index
 
+- [docs/competitive_evaluation.md](file:///c:/Users/Admin/Desktop/AI/sokoban-midterm-second-pass/sokoban-midterm/docs/competitive_evaluation.md): RL-inspired state potential formulation, reward shaping interpretation, empirical weights, and controlled head-to-head benchmark.
 - [docs/requirements_matrix.md](file:///c:/Users/Admin/Desktop/AI/sokoban-midterm-second-pass/sokoban-midterm/docs/requirements_matrix.md): Traceability matrix matching all assignment specifications.
 - [docs/experiment_methodology.md](file:///c:/Users/Admin/Desktop/AI/sokoban-midterm-second-pass/sokoban-midterm/docs/experiment_methodology.md): Rigorous two-phase benchmarking protocol.
 - [docs/experiment_results.md](file:///c:/Users/Admin/Desktop/AI/sokoban-midterm-second-pass/sokoban-midterm/docs/experiment_results.md): Empirical data tables, metrics, and speedup analysis.
@@ -375,3 +399,5 @@ PYTHONPATH=src python3 scripts/package_submission.py --group-id "GROUP01" --stud
 - [docs/heuristic_analysis.md](file:///c:/Users/Admin/Desktop/AI/sokoban-midterm-second-pass/sokoban-midterm/docs/heuristic_analysis.md): Formal admissibility and consistency proofs and competitive static BFS.
 - [docs/optimization_report.md](file:///c:/Users/Admin/Desktop/AI/sokoban-midterm-second-pass/sokoban-midterm/docs/optimization_report.md): Search engineering details and memory optimization.
 - [docs/presentation_outline.md](file:///c:/Users/Admin/Desktop/AI/sokoban-midterm-second-pass/sokoban-midterm/docs/presentation_outline.md): 8-slide oral presentation blueprint.
+- [docs/oral_defense_notes.md](file:///c:/Users/Admin/Desktop/AI/sokoban-midterm-second-pass/sokoban-midterm/docs/oral_defense_notes.md): Oral defense speaking notes and architectural invariants.
+
