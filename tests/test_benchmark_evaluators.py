@@ -2,8 +2,9 @@ import pytest
 from pathlib import Path
 import sys
 
-# Ensure src is in path
+# Ensure src and root are in path
 root = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(root))
 sys.path.insert(0, str(root / 'src'))
 
 from sokoban.map import SokobanMap

@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
 from sokoban.map import SokobanMap
-from sokoban.competitive.state import initial_state
+from sokoban.competitive.state import initial_state, CompetitiveState
 from sokoban.competitive.evaluator import CompetitiveEvaluator, DEFAULT_WEIGHTS
 from sokoban.agents import AStarAgent, GBFSAgent
 
@@ -213,3 +213,49 @@ def test_situation_3_horizon_awareness_scales_score_importance(comp_map):
 
     assert b2['score_contrib'] > b1['score_contrib'], "Score contribution must scale up near the horizon"
     assert b2['score_contrib'] == 44.4 and b1['score_contrib'] == 30.0
+
+def test_fallback_action_selects_legal_push_when_walk_blocked():
+    """Verify agent selects a legal push action when all pure walk neighbors are blocked."""
+    # Map where player at (1, 1) is surrounded by walls on North, West, South, and a pushable box East at (1, 2)
+    # %: wall, B: box, .: goal, A: player
+    text = (
+        "%%%%%%\n"
+        "%AB .%\n"
+        "%%%%%%\n"
+    )
+    board = SokobanMap.from_text(text)
+    state = CompetitiveState(p1=(1, 1), p2=(1, 4), boxes=frozenset({(1, 2)}), owners=(), step=0)
+    agent = AStarAgent(player_id=1)
+    act = agent.choose_action(state, board, time_limit_ms=1000, step_limit=10)
+    # East is the ONLY valid move (it's a legal push). North, South, West are walls.
+    assert act == 'East', f"Expected fallback/planner to choose legal push 'East', got {act}"
+
+def test_clean_ownership_ablation_zeros_scores_and_disruption(comp_map):
+    """Verify that when enable_ownership=False, no score difference is credited and no ownership disruption occurs."""
+    ev = CompetitiveEvaluator.get(comp_map)
+    boxes_with_goal = frozenset((comp_map.initial_boxes - {(2, 3)}) | {(2, 2)})
+    # Player 2 owns the box on goal (2, 2)
+    owners = (((2, 2), 2),)
+
+    # With ownership enabled: score_diff is -1 for player 1
+    phi_with = ev.evaluate_phi(
+        player_pos=(1, 1), opp_pos=(7, 10), boxes=boxes_with_goal,
+        owners=owners, step=0, player_id=1, step_limit=25, enable_ownership=True
+    )
+    # With ownership disabled: neither agent owns goals; score_diff must be 0
+    phi_without = ev.evaluate_phi(
+        player_pos=(1, 1), opp_pos=(7, 10), boxes=boxes_with_goal,
+        owners=owners, step=0, player_id=1, step_limit=25, enable_ownership=False
+    )
+    # The score component in phi_without must be 0
+    assert phi_without > phi_with, "Disabling ownership removes negative score diff (-30) for player 1"
+
+def test_find_useful_pushes_bipartite_matching_cost_improvement(comp_map):
+    """Verify that find_useful_pushes includes pushes that improve overall bipartite matching cost."""
+    ev = CompetitiveEvaluator.get(comp_map)
+    pushes = ev.find_useful_pushes(
+        player_pos=(1, 1), opp_pos=(7, 10), boxes=comp_map.initial_boxes,
+        owner_map={}, player_id=1
+    )
+    assert len(pushes) > 0, "Must identify useful push candidates from initial configuration"
+

@@ -228,18 +228,24 @@ def run_tuning():
         trial_idx += 1
 
     # Final Validation on Holdout Validation Set (competitive_04, competitive_05)
-    final_w = CompetitiveWeights(w_score=30.0, w_push=3.0, w_route=2.0)
+    if len(best_candidate) == 2:
+        chosen_s, chosen_p = best_candidate
+        chosen_r = 2.0
+    else:
+        chosen_s, chosen_p, chosen_r = best_candidate
+
+    final_w = CompetitiveWeights(w_score=chosen_s, w_push=chosen_p, w_route=chosen_r)
     val_res = evaluate_configuration_head_to_head(final_w, validation_maps)
     val_row = {
         'trial': trial_idx,
         'stage': 'Validation Set (Holdout competitive_04, 05)',
-        'w_score': 30.0,
-        'w_push': 3.0,
-        'w_route': 2.0,
+        'w_score': chosen_s,
+        'w_push': chosen_p,
+        'w_route': chosen_r,
         **val_res,
     }
     trials.append(val_row)
-    print(f"\n[Validation Set Check] W_SCORE=30.0 W_PUSH=3.0 W_ROUTE=2.0 | "
+    print(f"\n[Validation Set Check] W_SCORE={chosen_s:4.1f} W_PUSH={chosen_p:4.1f} W_ROUTE={chosen_r:4.1f} | "
           f"Obj={val_res['objective_score']:6.2f} | Diff={val_res['avg_score_diff']:+5.2f} | "
           f"W/L/T={val_res['new_wins']}/{val_res['old_wins']}/{val_res['ties']} | "
           f"MaxLat={val_res['max_latency_ms']}ms")

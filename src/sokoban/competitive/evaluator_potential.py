@@ -53,6 +53,8 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
             owner_map = {}
 
         useful_pushes = []
+        cur_matching_cost = self.heuristic.for_boxes(boxes)
+
         for b in boxes:
             b_owner = owner_map.get(b, 0)
             is_own_completed = (b in self.goals and b_owner == player_id)
@@ -89,7 +91,14 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
                 # Situation 4: Advancing uncompleted box closer to goals
                 cur_dist = min((self.heuristic.distance(b, g) for g in self.goals), default=float('inf'))
                 nxt_dist = min((self.heuristic.distance(dest, g) for g in self.goals), default=float('inf'))
-                if nxt_dist < cur_dist:
+                if nxt_dist < cur_dist and nxt_dist != float('inf'):
+                    useful_pushes.append((supp, dest))
+                    continue
+
+                # Check if full bipartite matching cost improves
+                new_boxes = frozenset((boxes - {b}) | {dest})
+                new_matching_cost = self.heuristic.for_boxes(new_boxes)
+                if new_matching_cost < cur_matching_cost and new_matching_cost != float('inf'):
                     useful_pushes.append((supp, dest))
 
         return useful_pushes
@@ -105,6 +114,11 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
         """Compute exact wall-aware, obstacle-avoiding shortest path distance
         from player_pos to the closest useful push support cell via dynamic BFS.
         """
+        # If all goals completed by me, support distance is zero
+        my_completed = sum(1 for b in boxes if b in self.goals and owner_map.get(b) == player_id)
+        if my_completed == len(self.goals) and len(self.goals) > 0:
+            return 0.0
+
         cache_key = (player_pos, opp_pos, boxes, tuple(sorted(owner_map.items())), player_id)
         if cache_key in self._support_cache:
             return self._support_cache[cache_key]
@@ -180,7 +194,7 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
             opp_id = 2 if player_id == 1 else 1
             opp_score = sum(1 for b in boxes if b in self.goals and owner_map.get(b) == opp_id)
         else:
-            my_score = sum(1 for b in boxes if b in self.goals)
+            my_score = 0
             opp_score = 0
 
         score_diff = (my_score - opp_score) if enable_score_diff else 0
@@ -201,7 +215,7 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
 
         if enable_support_dist:
             support_dist = self.compute_support_distance(
-                player_pos, opp_pos, boxes, owner_map, player_id
+                player_pos, opp_pos, boxes, owner_map if enable_ownership else {}, player_id
             )
         else:
             support_dist = 0.0
@@ -277,19 +291,33 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
         player_id: int,
         step_limit: int,
         weights: CompetitiveWeights = DEFAULT_WEIGHTS,
+        **kwargs,
     ) -> dict:
         """Provide detailed per-component breakdown for CLI/debug inspection."""
+        enable_ownership = kwargs.get('enable_ownership', True)
+        enable_score_diff = kwargs.get('enable_score_diff', True)
+        enable_support_dist = kwargs.get('enable_support_dist', True)
+        enable_horizon_scaling = kwargs.get('enable_horizon_scaling', True)
+
         owner_map = dict(owners)
-        my_score = sum(1 for b in boxes if b in self.goals and owner_map.get(b) == player_id)
-        opp_id = 2 if player_id == 1 else 1
-        opp_score = sum(1 for b in boxes if b in self.goals and owner_map.get(b) == opp_id)
-        score_diff = my_score - opp_score
+        if enable_ownership:
+            my_score = sum(1 for b in boxes if b in self.goals and owner_map.get(b) == player_id)
+            opp_id = 2 if player_id == 1 else 1
+            opp_score = sum(1 for b in boxes if b in self.goals and owner_map.get(b) == opp_id)
+        else:
+            my_score = 0
+            opp_score = 0
+        score_diff = (my_score - opp_score) if enable_score_diff else 0
 
         push_cost = self.heuristic.for_boxes(boxes)
-        support_dist = self.compute_support_distance(
-            player_pos, opp_pos, boxes, owner_map, player_id
-        )
-        u = min(1.0, max(0.0, step / step_limit)) if step_limit > 0 else 0.0
+        if enable_support_dist:
+            support_dist = self.compute_support_distance(
+                player_pos, opp_pos, boxes, owner_map if enable_ownership else {}, player_id
+            )
+        else:
+            support_dist = 0.0
+
+        u = min(1.0, max(0.0, step / step_limit)) if (step_limit > 0 and enable_horizon_scaling) else 0.0
         w_score_eff = weights.w_score * (1.0 + weights.horizon_alpha * u)
         if score_diff > 0 and u > 0.7:
             w_push_eff = weights.w_push * (1.0 - 0.25 * u)
@@ -297,7 +325,7 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
             w_push_eff = weights.w_push
 
         phi = self.evaluate_phi(
-            player_pos, opp_pos, boxes, owners, step, player_id, step_limit, weights
+            player_pos, opp_pos, boxes, owners, step, player_id, step_limit, weights, **kwargs
         )
 
         return {

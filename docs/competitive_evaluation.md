@@ -2,7 +2,7 @@
 
 ## 1. Overview & Mathematical Formulation
 
-In competitive two-agent Sokoban, the game objective shifts from single-agent shortest-path cost minimization to a **multi-agent zero-sum territorial contest** over a fixed horizon of $n$ steps. 
+In competitive two-agent Sokoban, the game objective shifts from single-agent shortest-path cost minimization to a **multi-agent competitive territorial contest** over a fixed horizon of $n$ steps. 
 
 Rather than treating the problem as generic geometry (e.g. naive distance to boxes), the competitive evaluation uses an **RL-inspired state potential function** $\Phi_i(s)$ from the perspective of Agent $i \in \{1, 2\}$, coupled with a transition reward shaping interpretation $R_i(s, a, s')$.
 
@@ -233,24 +233,24 @@ To determine which mathematical mechanisms in $\Phi_i(s)$ drive decision quality
 
 | Evaluator Variant | Score Diff vs OLD | Wins | Losses | Ties | Win Rate | Useful Pushes | Ineffective Actions | Max Latency | Primary Strategic Impact |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|---|
-| **Full Potential Evaluator** | **+7** | **6** | 2 | 8 | **0.375** | **37** | 7 | 95.2 ms | Baseline state potential function |
-| **No Score Difference ($W_{\text{SCORE}}=0$)** | **-8** | 3 | **11** | 2 | 0.188 | 25 | 6 | 161.0 ms | **Catastrophic drop**: agent loses 11 matches to OLD; loses goal focus |
-| **No Ownership Logic (neutral goals)** | **0** | 3 | 3 | 10 | 0.188 | 25 | 0 | 86.5 ms | Net score drops to 0; unable to differentiate defending vs stealing |
-| **No Support Distance ($W_{\text{ROUTE}}=0$)** | **+5** | 5 | 2 | 9 | 0.312 | 36 | 0 | **20.7 ms** | Drops from +7 to +5; inferior push angle alignment |
-| **No Horizon Scaling ($\alpha=0$)** | **+7** | 6 | 2 | 8 | 0.375 | 37 | 7 | 215.0 ms | Max latency doubles due to lack of late-game lead-defense pruning |
+| **Full Potential Evaluator** | **+7** | **6** | 2 | 8 | **0.375** | **37** | 7 | 136.8 ms | Baseline state potential function |
+| **No Score Difference ($W_{\text{SCORE}}=0$)** | **-10** | 2 | **12** | 2 | 0.125 | 23 | 5 | 125.2 ms | **Catastrophic drop**: agent loses 12 matches to OLD; loses goal focus |
+| **No Ownership Logic (neutral goals)** | **-6** | 4 | 10 | 2 | 0.250 | 25 | 0 | 198.6 ms | Severe drop (-6 net score, 10 losses); unable to defend goals or disrupt opponent |
+| **No Support Distance ($W_{\text{ROUTE}}=0$)** | **+6** | 6 | 2 | 8 | 0.375 | 36 | 0 | **30.7 ms** | Drops from +7 to +6; inferior push angle alignment |
+| **No Horizon Scaling ($\alpha=0$)** | **+7** | 6 | 2 | 8 | 0.375 | 37 | 7 | 70.8 ms | Slower adaptation to end-game lead preservation |
 
 ### Ablation Takeaways
-1. **Score Difference is Essential**: Eliminating $W_{\text{SCORE}}$ causes the agent to lose decisively against the OLD baseline (-8 net score, 11 losses).
-2. **Ownership Logic Separates Defense and Disruption**: Without ownership tracking, the agent achieves exactly 0 net score advantage.
-3. **Support Distance Optimizes Manoeuvring**: Navigating to push support cells rather than box centers provides a tangible +2 score edge.
+1. **Score Difference is Essential**: Eliminating $W_{\text{SCORE}}$ causes the agent to suffer a catastrophic collapse against the OLD baseline (-10 net score, 12 losses).
+2. **Ownership Logic Drives Defense and Disruption**: Cleanly disabling ownership awareness (neutral goals, zero territorial attribution) causes the agent to lose 10 matches (-6 net score), proving that ownership-aware defense and disruption are mandatory for competitive dominance.
+3. **Support Distance Optimizes Manoeuvring**: Navigating to push support cells rather than box centers provides a clean score edge.
 
 ---
 
 ### Final Empirical Conclusion
 
-**Classification: Category A — The NEW evaluator unambiguously improves decision quality across both algorithms.**
+**Classification: Category A — The NEW evaluator significantly improves decision quality across both algorithms.**
 
-1. **Win Dominance**: 100 wins to 10 losses across all 360 primary competitive matches (10:1 win ratio).
+1. **Decisive Win Dominance**: 100 wins to 10 losses across all 360 primary competitive matches (10:1 win-to-loss ratio in non-draw matches). On symmetric unseen maps, 87.5% of matches end in draws due to balanced layout constraints, but when decisive outcomes occur, NEW wins 14 times more often than OLD (28 wins vs 2 losses).
 2. **Score Advantage**: +150 net score across all primary matches (+68.8% more points).
 3. **Statistical Confidence**: 95% Bootstrap CI strictly positive on both tuning/validation ($[+0.683, +1.042]$) and unseen holdout test ($[+0.121, +0.271]$).
 4. **Real-Time Compliance**: Decision latency averages $< 15$ ms with **0 deadline fallbacks** across all 456 matches.
