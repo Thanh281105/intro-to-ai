@@ -33,6 +33,8 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
         )
         self._support_cache: dict[tuple, float] = {}
         self._threat_cache: dict[tuple, float] = {}
+        self._defense_cache: dict[tuple, float] = {}
+        self._disrupt_cache: dict[tuple, float] = {}
 
     def is_deadlock_square(self, p: Pos) -> bool:
         """Check if cell is a sound static deadlock square."""
@@ -263,6 +265,112 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
         self._threat_cache[cache_key] = threat
         return threat
 
+    def compute_defense(
+        self,
+        player_pos: Pos,
+        opp_pos: Pos,
+        boxes: frozenset[Pos],
+        owner_map: dict[Pos, int],
+        player_id: int,
+    ) -> float:
+        """Compute Defense score: 1.0 - vulnerability for each own completed box."""
+        my_scored = [b for b in boxes if b in self.goals and owner_map.get(b) == player_id]
+        if not my_scored:
+            return 0.0
+
+        cache_key = (player_pos, opp_pos, boxes, tuple(sorted(owner_map.items())), player_id)
+        if cache_key in self._defense_cache:
+            return self._defense_cache[cache_key]
+
+        # Single-pass BFS from opp_pos
+        opp_dist: dict[Pos, int] = {opp_pos: 0}
+        q = deque([opp_pos])
+        while q:
+            cur = q.popleft()
+            cd = opp_dist[cur]
+            for dr, dc in ((-1, 0), (0, 1), (1, 0), (0, -1)):
+                nxt = (cur[0] + dr, cur[1] + dc)
+                if (
+                    self.board.free(nxt)
+                    and nxt not in boxes
+                    and nxt not in opp_dist
+                ):
+                    opp_dist[nxt] = cd + 1
+                    q.append(nxt)
+
+        total_vuln = 0.0
+        for b in my_scored:
+            vuln = 0.0
+            for action, (dr, dc) in DIRECTIONS.items():
+                dest = (b[0] + dr, b[1] + dc)
+                supp = (b[0] - dr, b[1] - dc)
+                if not self.board.free(dest) or not self.board.free(supp):
+                    continue
+                if supp in boxes:
+                    continue
+                # If player physically occupies this support cell, player blocks the ejection!
+                if player_pos == supp:
+                    continue
+                d_opp = opp_dist.get(supp, float('inf'))
+                if d_opp <= 2:
+                    vuln = max(vuln, 1.0 / (d_opp + 1))
+            total_vuln += vuln
+
+        defense_score = -total_vuln
+        self._defense_cache[cache_key] = defense_score
+        return defense_score
+
+    def compute_disruption(
+        self,
+        player_pos: Pos,
+        opp_pos: Pos,
+        boxes: frozenset[Pos],
+        owner_map: dict[Pos, int],
+        player_id: int,
+    ) -> float:
+        """Compute Disruption score: player proximity and ability to eject opponent's scored box."""
+        opp_id = 2 if player_id == 1 else 1
+        opp_scored = [b for b in boxes if b in self.goals and owner_map.get(b) == opp_id]
+        if not opp_scored:
+            return 0.0
+
+        cache_key = (player_pos, opp_pos, boxes, tuple(sorted(owner_map.items())), player_id)
+        if cache_key in self._disrupt_cache:
+            return self._disrupt_cache[cache_key]
+
+        # Single-pass BFS from player_pos
+        p_dist: dict[Pos, int] = {player_pos: 0}
+        q = deque([player_pos])
+        while q:
+            cur = q.popleft()
+            cd = p_dist[cur]
+            for dr, dc in ((-1, 0), (0, 1), (1, 0), (0, -1)):
+                nxt = (cur[0] + dr, cur[1] + dc)
+                if (
+                    self.board.free(nxt)
+                    and nxt not in boxes
+                    and nxt != opp_pos
+                    and nxt not in p_dist
+                ):
+                    p_dist[nxt] = cd + 1
+                    q.append(nxt)
+
+        disrupt_max = 0.0
+        for b in opp_scored:
+            for action, (dr, dc) in DIRECTIONS.items():
+                dest = (b[0] + dr, b[1] + dc)
+                supp = (b[0] - dr, b[1] - dc)
+                if not self.board.free(dest) or not self.board.free(supp):
+                    continue
+                if supp in boxes or supp == opp_pos:
+                    continue
+                d_p = p_dist.get(supp, float('inf'))
+                if d_p <= 2:
+                    disrupt_max = max(disrupt_max, 1.0 / (d_p + 1))
+
+        self._disrupt_cache[cache_key] = disrupt_max
+        return disrupt_max
+
     def evaluate_phi(
         self,
         player_pos: Pos,
@@ -278,6 +386,8 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
         enable_horizon_scaling: bool = True,
         enable_ownership: bool = True,
         enable_threat: bool = True,
+        enable_defense: bool = True,
+        enable_disrupt: bool = True,
     ) -> float:
         """Compute state potential Phi_i(s) from perspective of Agent i."""
         owner_map = dict(owners)
@@ -319,6 +429,20 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
         else:
             threat = 0.0
 
+        if enable_defense and weights.w_defense > 0:
+            defense = self.compute_defense(
+                player_pos, opp_pos, boxes, owner_map if enable_ownership else {}, player_id
+            )
+        else:
+            defense = 0.0
+
+        if enable_disrupt and weights.w_disrupt > 0:
+            disruption = self.compute_disruption(
+                player_pos, opp_pos, boxes, owner_map if enable_ownership else {}, player_id
+            )
+        else:
+            disruption = 0.0
+
         # Horizon awareness: score diff matters more near the end
         if enable_horizon_scaling and step_limit > 0:
             u = min(1.0, max(0.0, step / step_limit))
@@ -336,6 +460,8 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
             - w_push_eff * push_cost
             - weights.w_route * support_dist
             - weights.w_threat * threat
+            + weights.w_defense * defense
+            + weights.w_disrupt * disruption
         )
         return float(phi)
 
@@ -425,6 +551,23 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
         else:
             threat = 0.0
 
+        enable_defense = kwargs.get('enable_defense', True)
+        enable_disrupt = kwargs.get('enable_disrupt', True)
+
+        if enable_defense and weights.w_defense > 0:
+            defense = self.compute_defense(
+                player_pos, opp_pos, boxes, owner_map if enable_ownership else {}, player_id
+            )
+        else:
+            defense = 0.0
+
+        if enable_disrupt and weights.w_disrupt > 0:
+            disruption = self.compute_disruption(
+                player_pos, opp_pos, boxes, owner_map if enable_ownership else {}, player_id
+            )
+        else:
+            disruption = 0.0
+
         u = min(1.0, max(0.0, step / step_limit)) if (step_limit > 0 and enable_horizon_scaling) else 0.0
         w_score_eff = weights.w_score * (1.0 + weights.horizon_alpha * u)
         if score_diff > 0 and u > 0.7:
@@ -450,6 +593,10 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
             'route_contrib': round(-weights.w_route * support_dist, 2),
             'threat': round(threat, 2),
             'threat_contrib': round(-weights.w_threat * threat, 2),
+            'defense': round(defense, 2),
+            'defense_contrib': round(weights.w_defense * defense, 2),
+            'disruption': round(disruption, 2),
+            'disrupt_contrib': round(weights.w_disrupt * disruption, 2),
             'phi': round(phi, 2),
             'h_comp': round(-phi, 2),
         }

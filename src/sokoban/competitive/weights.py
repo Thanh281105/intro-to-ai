@@ -16,6 +16,8 @@ class CompetitiveWeights:
     w_push: float = 3.0
     w_route: float = 2.0
     w_threat: float = 6.0
+    w_defense: float = 4.0
+    w_disrupt: float = 4.0
     step_penalty: float = -1.0
     terminal_win: float = 1000.0
     terminal_loss: float = -1000.0
