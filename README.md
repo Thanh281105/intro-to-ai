@@ -12,7 +12,7 @@ An end-to-end, release-candidate implementation of classical heuristic search (U
 - `maps/hard_01.txt`: Multi-box bottleneck puzzle (optimal cost: 10).
 - `maps/example_map.txt`: **Authoritative assignment benchmark map** restored character-by-character from PDF Page 2 (8x9 grid, 7 boxes, 7 targets; optimal cost: 34).
 
-### Competitive Multi-Agent Maps (15 Symmetrical Arenas):
+### Competitive Multi-Agent Maps (15 Competitive Arenas):
 - **Tuning Set**:
   - `maps/competitive_01.txt`: Symmetrical 4-goal dual arena (mirror symmetry).
   - `maps/competitive_02.txt`: Central contested box arena featuring dynamic point disruption & theft (`Situation 1 & 2`).
@@ -20,8 +20,8 @@ An end-to-end, release-candidate implementation of classical heuristic search (U
 - **Holdout Validation Set**:
   - `maps/competitive_04.txt`: Counter-attack arena featuring decisive GBFS victory ($2 - 1$).
   - `maps/competitive_05.txt`: Dual chamber with central obstacle wall and 4 contested goals.
-- **Unseen Final Test Set (Holdout)**:
-  - `maps/competitive_06.txt` to `maps/competitive_15.txt`: 10 diverse unseen competitive topologies (crossroads, diamond, twin corridors, fortress, labyrinths, sprint fields). Weights were *never* adjusted on these maps.
+- **Held-Out Test Set (Holdout Benchmark)**:
+  - `maps/competitive_06.txt` to `maps/competitive_15.txt`: 10 diverse competitive topologies (crossroads, diamond, twin corridors, fortress, labyrinths, sprint fields). Weights were held fixed without map-specific tuning.
 
 ### Recommended Demonstrations:
 - **Single-Agent GUI Replay**: `maps/example_map.txt` with `astar`.

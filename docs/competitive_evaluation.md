@@ -195,7 +195,7 @@ To rigorously answer whether the NEW evaluator improves decision quality when th
    This balances evaluator assignment across player identities and spawn locations.
 3. **Strict Holdout Partitioning**:
    - **Tuning & Validation Set**: `competitive_01` to `competitive_05` (5 maps $\times$ 3 horizons $\times$ 2 algos $\times$ 4 matches = **120 matches**).
-   - **Final Unseen Test Set (Holdout)**: `competitive_06` to `competitive_15` (10 maps $\times$ 3 horizons $\times$ 2 algos $\times$ 4 matches = **240 matches**). Weights were *never* adjusted on this set.
+   - **Held-Out Benchmark Set (Holdout)**: `competitive_06` to `competitive_15` (10 maps $\times$ 3 horizons $\times$ 2 algos $\times$ 4 matches = **240 matches**). Weights were held fixed without map-specific tuning.
    - **Secondary Stress Test**: 4 single-agent maps (`easy_01`, `medium_01`, `hard_01`, `example_map` = **96 matches**).
 
 ---
@@ -207,19 +207,19 @@ To rigorously answer whether the NEW evaluator improves decision quality when th
 | **Tuning & Val** | $A^*$ | 60 | **36** (60.0%) | 4 (6.7%) | 20 | 0.600 | **106** | 56 | **+50** | **+0.833** | [+0.583, +1.100] | **168** / 134 | 220 / 198 | 13.94 ms / 5.32 ms | 0 / 0 |
 | **Tuning & Val** | GBFS | 60 | **36** (60.0%) | 4 (6.7%) | 20 | 0.600 | **108** | 52 | **+56** | **+0.933** | [+0.633, +1.217] | **184** / 146 | 78 / 48 | 8.84 ms / 4.36 ms | 0 / 0 |
 | **Tuning & Val** | **ALL** | **120** | **72** (60.0%) | **8** (6.7%) | **40** | **0.600** | **214** | **108** | **+106** | **+0.883** | **[+0.692, +1.083]** | **352** / **280** | 298 / 246 | **11.39 ms** / 4.84 ms | **0 / 0** |
-| **Unseen Test** | $A^*$ | 120 | **20** (16.7%) | 0 (0.0%) | 100 | 0.167 | **86** | 52 | **+34** | **+0.283** | [+0.167, +0.400] | **208** / 190 | 1094 / 1094 | 9.36 ms / 3.88 ms | 0 / 0 |
-| **Unseen Test** | GBFS | 120 | **20** (16.7%) | 0 (0.0%) | 100 | 0.167 | **94** | 62 | **+32** | **+0.267** | [+0.158, +0.383] | **236** / 210 | 1104 / 1090 | 5.76 ms / 2.96 ms | 0 / 0 |
-| **Unseen Test** | **ALL** | **240** | **40** (16.7%) | **0** (0.0%) | **200** | **0.167** | **180** | **114** | **+66** | **+0.275** | **[+0.196, +0.362]** | **444** / **400** | 2198 / 2184 | **7.56 ms** / 3.42 ms | **0 / 0** |
+| **Held-Out Test** | $A^*$ | 120 | **20** (16.7%) | 0 (0.0%) | 100 | 0.167 | **86** | 52 | **+34** | **+0.283** | [+0.167, +0.400] | **208** / 190 | 1094 / 1094 | 9.36 ms / 3.88 ms | 0 / 0 |
+| **Held-Out Test** | GBFS | 120 | **20** (16.7%) | 0 (0.0%) | 100 | 0.167 | **94** | 62 | **+32** | **+0.267** | [+0.158, +0.383] | **236** / 210 | 1104 / 1090 | 5.76 ms / 2.96 ms | 0 / 0 |
+| **Held-Out Test** | **ALL** | **240** | **40** (16.7%) | **0** (0.0%) | **200** | **0.167** | **180** | **114** | **+66** | **+0.275** | **[+0.196, +0.362]** | **444** / **400** | 2198 / 2184 | **7.56 ms** / 3.42 ms | **0 / 0** |
 | **Stress Test** | **ALL** | **96** | 24 (25.0%) | 26 (27.1%) | 46 | 0.250 | 68 | 56 | +12 | +0.125 | [-0.229, +0.479] | 124 / 138 | 1270 / 1260 | 5.80 ms / 3.35 ms | 0 / 0 |
 
 ---
 
 ### Rigorous Statistical Findings
 
-1. **Unseen Holdout Generalization**:
-   - Across the **240 unseen holdout test matches**, NEW achieved **40 wins, 0 losses, and 200 ties** (40:0 win-to-loss ratio, completely undefeated).
+1. **Held-Out Benchmark Generalization**:
+   - Across the **240 held-out test matches**, NEW achieved **40 wins, 0 losses, and 200 ties** (completely undefeated across all decisive matches).
    - The 95% Bootstrap Confidence Interval for score improvement is **[+0.196, +0.362]**, strictly positive and well bounded away from zero.
-   - Both $A^*$ and GBFS on unseen maps recorded **zero losses across all 120 matches each** (A*: 20W / 0L / 100T, $+34$ points; GBFS: 20W / 0L / 100T, $+32$ points).
+   - Both $A^*$ and GBFS on held-out maps recorded **zero losses across all 120 matches each** (A*: 20W / 0L / 100T, $+34$ points; GBFS: 20W / 0L / 100T, $+32$ points).
 2. **Spawn Asymmetry Disclosure**:
    - On `example_map.txt` (designed for single-player), our 4-way debiasing revealed that whoever occupied Spawn A scored 3–4 points and won, while whoever occupied Spawn B lost.
    - When aggregated across both orientations, Spawn A gave 1 win to NEW and 1 win to OLD, balancing out spawn-location effects.
@@ -249,11 +249,11 @@ To determine which mathematical mechanisms in $\Phi_i(s)$ drive decision quality
 
 ### Final Empirical Conclusion
 
-**Classification: Category A — The NEW evaluator significantly improves decision quality across both algorithms.**
+**Classification: Category A — The NEW evaluator shows a positive empirical improvement in decision quality across both algorithms.**
 
-1. **Decisive Win Dominance**: 112 wins to 8 losses across all 360 primary competitive matches (72W - 8L on tuning/val, 40W - 0L on unseen test; 14:1 win-to-loss ratio in decisive matches). On unseen symmetric maps, when decisive outcomes occur, NEW wins 40 matches and loses exactly 0.
-2. **Score Advantage**: +172 net score across all 360 primary competitive matches (+106 on val, +66 on unseen holdout).
-3. **Statistical Confidence**: 95% Bootstrap CI strictly positive on both tuning/validation ($[+0.692, +1.083]$) and unseen holdout test ($[+0.196, +0.362]$).
+1. **Decisive Match Outcomes**: 112 wins to 8 losses across all 360 primary competitive matches (72W - 8L on tuning/val, 40W - 0L on held-out test). On held-out symmetric maps, when decisive outcomes occur, NEW achieved 40 wins and 0 losses.
+2. **Score Advantage**: +172 net score across all 360 primary competitive matches (+106 on val, +66 on held-out test).
+3. **Statistical Confidence**: 95% Bootstrap CI strictly positive on both tuning/validation ($[+0.692, +1.083]$) and held-out test ($[+0.196, +0.362]$).
 4. **Real-Time Compliance**: Decision latency averages $< 12$ ms with **0 deadline fallbacks** across all 456 matches (maximum observed latency 145 ms $\ll$ 1000 ms).
 
 
