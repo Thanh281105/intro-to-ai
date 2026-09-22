@@ -273,52 +273,59 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
         owner_map: dict[Pos, int],
         player_id: int,
     ) -> float:
-        """Compute Defense score: 1.0 - vulnerability for each own completed box."""
+        """Compute Defense score: penalized by active vulnerability of own completed boxes."""
         my_scored = [b for b in boxes if b in self.goals and owner_map.get(b) == player_id]
         if not my_scored:
             return 0.0
 
-        cache_key = (player_pos, opp_pos, boxes, tuple(sorted(owner_map.items())), player_id)
+        cache_key = (opp_pos, boxes, tuple(sorted(owner_map.items())), player_id)
         if cache_key in self._defense_cache:
-            return self._defense_cache[cache_key]
+            base_vuln = self._defense_cache[cache_key]
+        else:
+            # Single-pass BFS from opp_pos
+            opp_dist: dict[Pos, int] = {opp_pos: 0}
+            q = deque([opp_pos])
+            while q:
+                cur = q.popleft()
+                cd = opp_dist[cur]
+                for dr, dc in ((-1, 0), (0, 1), (1, 0), (0, -1)):
+                    nxt = (cur[0] + dr, cur[1] + dc)
+                    if (
+                        self.board.free(nxt)
+                        and nxt not in boxes
+                        and nxt not in opp_dist
+                    ):
+                        opp_dist[nxt] = cd + 1
+                        q.append(nxt)
 
-        # Single-pass BFS from opp_pos
-        opp_dist: dict[Pos, int] = {opp_pos: 0}
-        q = deque([opp_pos])
-        while q:
-            cur = q.popleft()
-            cd = opp_dist[cur]
-            for dr, dc in ((-1, 0), (0, 1), (1, 0), (0, -1)):
-                nxt = (cur[0] + dr, cur[1] + dc)
-                if (
-                    self.board.free(nxt)
-                    and nxt not in boxes
-                    and nxt not in opp_dist
-                ):
-                    opp_dist[nxt] = cd + 1
-                    q.append(nxt)
+            total_vuln = 0.0
+            for b in my_scored:
+                vuln = 0.0
+                for action, (dr, dc) in DIRECTIONS.items():
+                    dest = (b[0] + dr, b[1] + dc)
+                    supp = (b[0] - dr, b[1] - dc)
+                    if not self.board.free(dest) or not self.board.free(supp):
+                        continue
+                    if supp in boxes:
+                        continue
+                    d_opp = opp_dist.get(supp, float('inf'))
+                    if d_opp <= 2:
+                        vuln = max(vuln, 1.0 / (d_opp + 1))
+                total_vuln += vuln
+            base_vuln = total_vuln
+            self._defense_cache[cache_key] = base_vuln
 
-        total_vuln = 0.0
+        # If player is physically standing on any ejection support cell, reduce vulnerability
+        player_blocking = False
         for b in my_scored:
-            vuln = 0.0
             for action, (dr, dc) in DIRECTIONS.items():
-                dest = (b[0] + dr, b[1] + dc)
                 supp = (b[0] - dr, b[1] - dc)
-                if not self.board.free(dest) or not self.board.free(supp):
-                    continue
-                if supp in boxes:
-                    continue
-                # If player physically occupies this support cell, player blocks the ejection!
                 if player_pos == supp:
-                    continue
-                d_opp = opp_dist.get(supp, float('inf'))
-                if d_opp <= 2:
-                    vuln = max(vuln, 1.0 / (d_opp + 1))
-            total_vuln += vuln
+                    player_blocking = True
+                    break
 
-        defense_score = -total_vuln
-        self._defense_cache[cache_key] = defense_score
-        return defense_score
+        eff_vuln = max(0.0, base_vuln - 0.5) if player_blocking else base_vuln
+        return -eff_vuln
 
     def compute_disruption(
         self,
@@ -328,32 +335,11 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
         owner_map: dict[Pos, int],
         player_id: int,
     ) -> float:
-        """Compute Disruption score: player proximity and ability to eject opponent's scored box."""
+        """Compute Disruption score: immediate O(1) proximity to ejecting opponent's scored box."""
         opp_id = 2 if player_id == 1 else 1
         opp_scored = [b for b in boxes if b in self.goals and owner_map.get(b) == opp_id]
         if not opp_scored:
             return 0.0
-
-        cache_key = (player_pos, opp_pos, boxes, tuple(sorted(owner_map.items())), player_id)
-        if cache_key in self._disrupt_cache:
-            return self._disrupt_cache[cache_key]
-
-        # Single-pass BFS from player_pos
-        p_dist: dict[Pos, int] = {player_pos: 0}
-        q = deque([player_pos])
-        while q:
-            cur = q.popleft()
-            cd = p_dist[cur]
-            for dr, dc in ((-1, 0), (0, 1), (1, 0), (0, -1)):
-                nxt = (cur[0] + dr, cur[1] + dc)
-                if (
-                    self.board.free(nxt)
-                    and nxt not in boxes
-                    and nxt != opp_pos
-                    and nxt not in p_dist
-                ):
-                    p_dist[nxt] = cd + 1
-                    q.append(nxt)
 
         disrupt_max = 0.0
         for b in opp_scored:
@@ -364,11 +350,11 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
                     continue
                 if supp in boxes or supp == opp_pos:
                     continue
-                d_p = p_dist.get(supp, float('inf'))
-                if d_p <= 2:
-                    disrupt_max = max(disrupt_max, 1.0 / (d_p + 1))
+                if player_pos == supp:
+                    disrupt_max = max(disrupt_max, 1.0)
+                elif abs(player_pos[0] - supp[0]) + abs(player_pos[1] - supp[1]) == 1:
+                    disrupt_max = max(disrupt_max, 0.5)
 
-        self._disrupt_cache[cache_key] = disrupt_max
         return disrupt_max
 
     def evaluate_phi(
@@ -443,25 +429,55 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
         else:
             disruption = 0.0
 
-        # Horizon awareness: score diff matters more near the end
+        # Phase 3: Dynamic Horizon Strategy
         if enable_horizon_scaling and step_limit > 0:
             u = min(1.0, max(0.0, step / step_limit))
-            w_score_eff = weights.w_score * (1.0 + weights.horizon_alpha * u)
-            if score_diff > 0 and u > 0.7:
-                w_push_eff = weights.w_push * (1.0 - 0.25 * u)
+            # Score weight increases near horizon, especially when losing
+            if score_diff < 0:
+                w_score_eff = weights.w_score * (1.0 + (weights.horizon_alpha + 0.5) * u)
+            else:
+                w_score_eff = weights.w_score * (1.0 + weights.horizon_alpha * u)
+
+            # Push weight: reduce risky pushes when leading late, increase when losing late
+            if score_diff > 0 and u > 0.6:
+                w_push_eff = weights.w_push * (1.0 - 0.4 * u)
+            elif score_diff < 0 and u > 0.6:
+                w_push_eff = weights.w_push * (1.0 + 0.25 * u)
             else:
                 w_push_eff = weights.w_push
+
+            # Threat weight grows towards late game
+            w_threat_eff = weights.w_threat * (1.0 + 0.5 * u)
+
+            # Defense weight: prioritized when leading late, decayed when losing late
+            if score_diff > 0:
+                w_defense_eff = weights.w_defense * (0.5 + 1.5 * u)
+            elif score_diff < 0:
+                w_defense_eff = weights.w_defense * (0.2 * (1.0 - u))
+            else:
+                w_defense_eff = weights.w_defense * (0.5 + 0.5 * u)
+
+            # Disruption weight: prioritized when losing late, decayed when leading late
+            if score_diff < 0:
+                w_disrupt_eff = weights.w_disrupt * (0.5 + 1.5 * u)
+            elif score_diff > 0:
+                w_disrupt_eff = weights.w_disrupt * (0.3 * (1.0 - u))
+            else:
+                w_disrupt_eff = weights.w_disrupt * (0.5 + 0.5 * u)
         else:
             w_score_eff = weights.w_score
             w_push_eff = weights.w_push
+            w_threat_eff = weights.w_threat
+            w_defense_eff = weights.w_defense
+            w_disrupt_eff = weights.w_disrupt
 
         phi = (
             w_score_eff * score_diff
             - w_push_eff * push_cost
             - weights.w_route * support_dist
-            - weights.w_threat * threat
-            + weights.w_defense * defense
-            + weights.w_disrupt * disruption
+            - w_threat_eff * threat
+            + w_defense_eff * defense
+            + w_disrupt_eff * disruption
         )
         return float(phi)
 
