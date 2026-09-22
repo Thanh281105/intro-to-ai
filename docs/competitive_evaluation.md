@@ -192,7 +192,7 @@ To rigorously answer whether the NEW evaluator improves decision quality when th
    - *Orientation B (Mirrored Spawns)*:
      - Match 3: P1(Spawn B)=NEW, P2(Spawn A)=OLD
      - Match 4: P1(Spawn B)=OLD, P2(Spawn A)=NEW
-   This mathematically neutralizes 100% of player-turn index bias AND spawn-location advantage.
+   This balances evaluator assignment across player identities and spawn locations.
 3. **Strict Holdout Partitioning**:
    - **Tuning & Validation Set**: `competitive_01` to `competitive_05` (5 maps $\times$ 3 horizons $\times$ 2 algos $\times$ 4 matches = **120 matches**).
    - **Final Unseen Test Set (Holdout)**: `competitive_06` to `competitive_15` (10 maps $\times$ 3 horizons $\times$ 2 algos $\times$ 4 matches = **240 matches**). Weights were *never* adjusted on this set.
@@ -204,45 +204,46 @@ To rigorously answer whether the NEW evaluator improves decision quality when th
 
 | Suite Split | Algorithm | Matches | NEW Wins | OLD Wins | Ties | Win Rate | NEW Score | OLD Score | Score Net | Mean Score Diff | 95% Bootstrap CI | Useful Pushes (NEW / OLD) | Ineffective Actions (NEW / OLD) | Avg Latency (NEW / OLD) | Fallbacks |
 |---|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **Tuning & Val** | $A^*$ | 60 | **36** (60.0%) | 4 (6.7%) | 20 | 0.600 | **106** | 56 | **+50** | **+0.833** | [+0.583, +1.100] | **168** / 134 | 230 / 208 | 20.24 ms / 14.37 ms | 0 / 0 |
-| **Tuning & Val** | GBFS | 60 | **36** (60.0%) | 4 (6.7%) | 20 | 0.600 | **106** | 52 | **+54** | **+0.900** | [+0.633, +1.183] | **180** / 140 | 198 / 172 | 7.51 ms / 7.82 ms | 0 / 0 |
-| **Tuning & Val** | **ALL** | **120** | **72** (60.0%) | **8** (6.7%) | **40** | **0.600** | **212** | **108** | **+104** | **+0.867** | **[+0.683, +1.042]** | **348** / **274** | 428 / 380 | **13.88 ms** / 11.09 ms | **0 / 0** |
-| **Unseen Test** | $A^*$ | 120 | **20** (16.7%) | 0 (0.0%) | 100 | 0.167 | **80** | 44 | **+36** | **+0.300** | [+0.175, +0.433] | **216** / 168 | 1198 / 1184 | 6.64 ms / 5.05 ms | 0 / 0 |
-| **Unseen Test** | GBFS | 120 | **8** (6.7%) | 2 (1.7%) | 110 | 0.067 | **76** | 66 | **+10** | **+0.083** | [+0.008, +0.175] | 186 / **190** | 1356 / 1350 | 3.00 ms / 2.93 ms | 0 / 0 |
-| **Unseen Test** | **ALL** | **240** | **28** (11.7%) | **2** (0.8%) | **210** | **0.117** | **156** | **110** | **+46** | **+0.192** | **[+0.121, +0.271]** | **402** / **358** | 2554 / 2534 | **4.82 ms** / 3.99 ms | **0 / 0** |
-| **Stress Test** | **ALL** | **96** | 36 (37.5%) | 22 (22.9%) | 38 | 0.375 | 76 | 48 | +28 | +0.292 | [-0.062, +0.635] | 138 / 126 | 1464 / 1456 | 3.50 ms / 4.02 ms | 0 / 0 |
+| **Tuning & Val** | $A^*$ | 60 | **36** (60.0%) | 4 (6.7%) | 20 | 0.600 | **106** | 56 | **+50** | **+0.833** | [+0.583, +1.100] | **168** / 134 | 220 / 198 | 13.94 ms / 5.32 ms | 0 / 0 |
+| **Tuning & Val** | GBFS | 60 | **36** (60.0%) | 4 (6.7%) | 20 | 0.600 | **108** | 52 | **+56** | **+0.933** | [+0.633, +1.217] | **184** / 146 | 78 / 48 | 8.84 ms / 4.36 ms | 0 / 0 |
+| **Tuning & Val** | **ALL** | **120** | **72** (60.0%) | **8** (6.7%) | **40** | **0.600** | **214** | **108** | **+106** | **+0.883** | **[+0.692, +1.083]** | **352** / **280** | 298 / 246 | **11.39 ms** / 4.84 ms | **0 / 0** |
+| **Unseen Test** | $A^*$ | 120 | **20** (16.7%) | 0 (0.0%) | 100 | 0.167 | **86** | 52 | **+34** | **+0.283** | [+0.167, +0.400] | **208** / 190 | 1094 / 1094 | 9.36 ms / 3.88 ms | 0 / 0 |
+| **Unseen Test** | GBFS | 120 | **20** (16.7%) | 0 (0.0%) | 100 | 0.167 | **94** | 62 | **+32** | **+0.267** | [+0.158, +0.383] | **236** / 210 | 1104 / 1090 | 5.76 ms / 2.96 ms | 0 / 0 |
+| **Unseen Test** | **ALL** | **240** | **40** (16.7%) | **0** (0.0%) | **200** | **0.167** | **180** | **114** | **+66** | **+0.275** | **[+0.196, +0.362]** | **444** / **400** | 2198 / 2184 | **7.56 ms** / 3.42 ms | **0 / 0** |
+| **Stress Test** | **ALL** | **96** | 24 (25.0%) | 26 (27.1%) | 46 | 0.250 | 68 | 56 | +12 | +0.125 | [-0.229, +0.479] | 124 / 138 | 1270 / 1260 | 5.80 ms / 3.35 ms | 0 / 0 |
 
 ---
 
 ### Rigorous Statistical Findings
 
 1. **Unseen Holdout Generalization**:
-   - Across the **240 unseen holdout test matches**, NEW achieved **28 wins, 2 losses, and 210 ties** (14:1 win-to-loss ratio).
-   - The 95% Bootstrap Confidence Interval for score improvement is **[+0.121, +0.271]**, strictly positive and bounded away from zero.
-   - For $A^*$ on unseen maps, NEW recorded **zero losses across all 120 matches** (20 wins, 0 losses, 100 ties, $+36$ points).
+   - Across the **240 unseen holdout test matches**, NEW achieved **40 wins, 0 losses, and 200 ties** (40:0 win-to-loss ratio, completely undefeated).
+   - The 95% Bootstrap Confidence Interval for score improvement is **[+0.196, +0.362]**, strictly positive and well bounded away from zero.
+   - Both $A^*$ and GBFS on unseen maps recorded **zero losses across all 120 matches each** (A*: 20W / 0L / 100T, $+34$ points; GBFS: 20W / 0L / 100T, $+32$ points).
 2. **Spawn Asymmetry Disclosure**:
    - On `example_map.txt` (designed for single-player), our 4-way debiasing revealed that whoever occupied Spawn A scored 3–4 points and won, while whoever occupied Spawn B lost.
-   - When aggregated across both orientations, Spawn A gave 1 win to NEW and 1 win to OLD, completely removing spawn bias.
-   - In the secondary stress test, the 95% CI spans zero ($[-0.062, +0.635]$), confirming that single-agent maps should only be treated as a stress test, not as primary proof of competitive generalization.
+   - When aggregated across both orientations, Spawn A gave 1 win to NEW and 1 win to OLD, balancing out spawn-location effects.
+   - In the secondary stress test, the 95% CI spans zero ($[-0.229, +0.479]$), confirming that single-agent maps should only be treated as a stress test, not as primary proof of competitive generalization.
 
 ---
 
 ## 7. Ablation Study: Component Contribution Analysis
 
-To determine which mathematical mechanisms in $\Phi_i(s)$ drive decision quality, we evaluated 5 feature variants against `OldEvaluator` across identical match conditions (`scripts/ablation_study.py`):
+To determine which mathematical mechanisms in $\Phi_i(s)$ drive decision quality, we evaluated 9 feature variants against `OldEvaluator` across identical match conditions (`scripts/ablation_study.py`):
 
 | Evaluator Variant | Score Diff vs OLD | Wins | Losses | Ties | Win Rate | Useful Pushes | Ineffective Actions | Max Latency | Primary Strategic Impact |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|---|
-| **Full Potential Evaluator** | **+7** | **6** | 2 | 8 | **0.375** | **37** | 7 | 136.8 ms | Baseline state potential function |
-| **No Score Difference ($W_{\text{SCORE}}=0$)** | **-10** | 2 | **12** | 2 | 0.125 | 23 | 5 | 125.2 ms | **Catastrophic drop**: agent loses 12 matches to OLD; loses goal focus |
-| **No Ownership Logic (neutral goals)** | **-6** | 4 | 10 | 2 | 0.250 | 25 | 0 | 198.6 ms | Severe drop (-6 net score, 10 losses); unable to defend goals or disrupt opponent |
-| **No Support Distance ($W_{\text{ROUTE}}=0$)** | **+6** | 6 | 2 | 8 | 0.375 | 36 | 0 | **30.7 ms** | Drops from +7 to +6; inferior push angle alignment |
-| **No Horizon Scaling ($\alpha=0$)** | **+7** | 6 | 2 | 8 | 0.375 | 37 | 7 | 70.8 ms | Slower adaptation to end-game lead preservation |
+| **Full Potential Evaluator** | **+7** | **6** | 2 | 8 | **0.375** | **37** | 7 | 82.9 ms | Full multi-component potential function |
+| **No Horizon Scaling ($\alpha=0$)** | **+6** | 5 | 2 | 9 | 0.312 | 38 | 4 | 101.9 ms | Mild drop (+7 to +6); slower endgame lead adaptation |
+| **No Support Distance ($W_{\text{ROUTE}}=0$)** | **+4** | 4 | 2 | 10 | 0.250 | 33 | 4 | 38.9 ms | Observable drop (+7 to +4); inferior push angle guidance |
+| **No Ownership Logic (neutral goals)** | **-3** | 4 | 7 | 5 | 0.250 | 28 | 0 | 113.7 ms | **Severe collapse**: score drops to -3, 7 losses; cannot defend or disrupt |
+| **No Score Difference ($W_{\text{SCORE}}=0$)** | **-6** | 2 | 9 | 5 | 0.125 | 27 | 0 | 121.2 ms | **Catastrophic collapse**: 9 losses, loses fundamental goal objective |
+| *No Threat / No Defense / No Disrupt / No Blocking* | **+7** | 6 | 2 | 8 | 0.375 | 37 | 7 | 81.5 - 119.7 ms | Conditional tactical effects active during close combat |
 
 ### Ablation Takeaways
-1. **Score Difference is Essential**: Eliminating $W_{\text{SCORE}}$ causes the agent to suffer a catastrophic collapse against the OLD baseline (-10 net score, 12 losses).
-2. **Ownership Logic Drives Defense and Disruption**: Cleanly disabling ownership awareness (neutral goals, zero territorial attribution) causes the agent to lose 10 matches (-6 net score), proving that ownership-aware defense and disruption are mandatory for competitive dominance.
-3. **Support Distance Optimizes Manoeuvring**: Navigating to push support cells rather than box centers provides a clean score edge.
+1. **Score Difference and Ownership are Mandatory Core Pillars**: Eliminating $W_{\text{SCORE}}$ causes catastrophic collapse (-6 net score, 9 losses). Disabling ownership awareness causes severe collapse (-3 net score, 7 losses), proving that ownership-aware territorial attribution is foundational.
+2. **Support Distance and Dynamic Horizon Provide Direct General Gains**: Removing support distance reduces net score from +7 to +4, and removing horizon scaling drops score to +6.
+3. **Tactical Components Act Conditionality**: Single-component ablation of Threat, Defense, Disruption, and Blocking retains +7 on this small ablation slice, reflecting that tactical terms activate conditionally during close contact and interact cooperatively.
 
 ---
 
@@ -250,9 +251,9 @@ To determine which mathematical mechanisms in $\Phi_i(s)$ drive decision quality
 
 **Classification: Category A — The NEW evaluator significantly improves decision quality across both algorithms.**
 
-1. **Decisive Win Dominance**: 100 wins to 10 losses across all 360 primary competitive matches (10:1 win-to-loss ratio in non-draw matches). On symmetric unseen maps, 87.5% of matches end in draws due to balanced layout constraints, but when decisive outcomes occur, NEW wins 14 times more often than OLD (28 wins vs 2 losses).
-2. **Score Advantage**: +150 net score across all primary matches (+68.8% more points).
-3. **Statistical Confidence**: 95% Bootstrap CI strictly positive on both tuning/validation ($[+0.683, +1.042]$) and unseen holdout test ($[+0.121, +0.271]$).
-4. **Real-Time Compliance**: Decision latency averages $< 15$ ms with **0 deadline fallbacks** across all 456 matches.
+1. **Decisive Win Dominance**: 112 wins to 8 losses across all 360 primary competitive matches (72W - 8L on tuning/val, 40W - 0L on unseen test; 14:1 win-to-loss ratio in decisive matches). On unseen symmetric maps, when decisive outcomes occur, NEW wins 40 matches and loses exactly 0.
+2. **Score Advantage**: +172 net score across all 360 primary competitive matches (+106 on val, +66 on unseen holdout).
+3. **Statistical Confidence**: 95% Bootstrap CI strictly positive on both tuning/validation ($[+0.692, +1.083]$) and unseen holdout test ($[+0.196, +0.362]$).
+4. **Real-Time Compliance**: Decision latency averages $< 12$ ms with **0 deadline fallbacks** across all 456 matches (maximum observed latency 145 ms $\ll$ 1000 ms).
 
 

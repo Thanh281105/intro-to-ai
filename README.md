@@ -56,7 +56,7 @@ export PYTHONPATH=src
 
 ### B. Run All Unit & Integration Tests
 
-Executes the complete test suite (56 tests covering void isolation, push semantics, A* equivalence, non-geometric heuristics, conflict resolution, deadlines, GUI state machine, turn telemetry, RL reward shaping, competitive evaluation situations, and controlled head-to-head evaluator benchmarks):
+Executes the complete test suite (81 tests covering void isolation, push semantics, A* equivalence, non-geometric heuristics, conflict resolution, deadlines, GUI state machine, turn telemetry, RL reward shaping, competitive evaluation situations, and controlled head-to-head evaluator benchmarks):
 
 #### Windows PowerShell:
 ```powershell
@@ -441,13 +441,13 @@ PYTHONPATH=src python3 scripts/tune_weights.py
 
 ## 3. Documentation Index
 
-- [docs/competitive_evaluation.md](file:///c:/Users/Admin/Desktop/AI/sokoban-midterm-second-pass/sokoban-midterm/docs/competitive_evaluation.md): RL-inspired state potential formulation, reward shaping interpretation, empirical weights, and controlled head-to-head benchmark.
-- [docs/requirements_matrix.md](file:///c:/Users/Admin/Desktop/AI/sokoban-midterm-second-pass/sokoban-midterm/docs/requirements_matrix.md): Traceability matrix matching all assignment specifications.
-- [docs/experiment_methodology.md](file:///c:/Users/Admin/Desktop/AI/sokoban-midterm-second-pass/sokoban-midterm/docs/experiment_methodology.md): Rigorous two-phase benchmarking protocol.
-- [docs/experiment_results.md](file:///c:/Users/Admin/Desktop/AI/sokoban-midterm-second-pass/sokoban-midterm/docs/experiment_results.md): Empirical data tables, metrics, and speedup analysis.
-- [docs/final_audit.md](file:///c:/Users/Admin/Desktop/AI/sokoban-midterm-second-pass/sokoban-midterm/docs/final_audit.md): Complete release-candidate audit report (all milestones PASS).
-- [docs/heuristic_analysis.md](file:///c:/Users/Admin/Desktop/AI/sokoban-midterm-second-pass/sokoban-midterm/docs/heuristic_analysis.md): Formal admissibility and consistency proofs and competitive static BFS.
-- [docs/optimization_report.md](file:///c:/Users/Admin/Desktop/AI/sokoban-midterm-second-pass/sokoban-midterm/docs/optimization_report.md): Search engineering details and memory optimization.
-- [docs/presentation_outline.md](file:///c:/Users/Admin/Desktop/AI/sokoban-midterm-second-pass/sokoban-midterm/docs/presentation_outline.md): 8-slide oral presentation blueprint.
-- [docs/oral_defense_notes.md](file:///c:/Users/Admin/Desktop/AI/sokoban-midterm-second-pass/sokoban-midterm/docs/oral_defense_notes.md): Oral defense speaking notes and architectural invariants.
+- [docs/competitive_evaluation.md](docs/competitive_evaluation.md): RL-inspired state potential formulation, reward shaping interpretation, empirical weights, and controlled head-to-head benchmark.
+- [docs/requirements_matrix.md](docs/requirements_matrix.md): Traceability matrix matching all assignment specifications.
+- [docs/experiment_methodology.md](docs/experiment_methodology.md): Rigorous two-phase benchmarking protocol.
+- [docs/experiment_results.md](docs/experiment_results.md): Empirical data tables, metrics, and speedup analysis.
+- [docs/final_audit.md](docs/final_audit.md): Complete release-candidate audit report (all milestones PASS).
+- [docs/heuristic_analysis.md](docs/heuristic_analysis.md): Formal admissibility and consistency proofs and competitive static BFS.
+- [docs/optimization_report.md](docs/optimization_report.md): Search engineering details and memory optimization.
+- [docs/presentation_outline.md](docs/presentation_outline.md): 8-slide oral presentation blueprint.
+- [docs/oral_defense_notes.md](docs/oral_defense_notes.md): Oral defense speaking notes and architectural invariants.
 
