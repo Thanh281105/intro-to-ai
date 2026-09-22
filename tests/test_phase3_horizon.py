@@ -48,3 +48,28 @@ def test_dynamic_horizon_losing_late_boosts_score_weight(comp_map_01):
     bd_late = ev.breakdown((1, 1), (10, 10), boxes, ((goal, 2),), step=24, player_id=1, step_limit=25, weights=w)
     # The penalty for trailing becomes more severe late in the game
     assert bd_late['score_contrib'] < bd_early['score_contrib']
+
+
+def test_breakdown_matches_evaluate_phi(comp_map_01):
+    ev = CompetitiveEvaluator.get(comp_map_01)
+    boxes = frozenset(comp_map_01.initial_boxes)
+    pos1 = comp_map_01.initial_player
+    pos2 = comp_map_01.initial_player2
+    owners = tuple((b, 1) for b in boxes)
+    weights = CompetitiveWeights()
+
+    for step in [0, 5, 12, 24]:
+        bd = ev.breakdown(pos1, pos2, boxes, owners, step=step, player_id=1, step_limit=25, weights=weights)
+        phi = ev.evaluate_phi(pos1, pos2, boxes, owners, step=step, player_id=1, step_limit=25, weights=weights)
+        expected_sum = (
+            bd['score_contrib']
+            + bd['push_contrib']
+            + bd['route_contrib']
+            + bd['threat_contrib']
+            + bd['defense_contrib']
+            + bd['disrupt_contrib']
+            + bd['blocking_contrib']
+        )
+        assert abs(bd['phi'] - phi) < 1e-4
+        assert abs(expected_sum - phi) < 0.1
+

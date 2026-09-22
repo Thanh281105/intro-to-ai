@@ -127,9 +127,10 @@ class AStarAgent(Agent):
         max_expansions = MAX_SEARCH_EXPANSIONS
         expanded = 0
         opposite_dirs = {'North': 'South', 'South': 'North', 'East': 'West', 'West': 'East'}
+        search_cutoff_ns = deadline - int(100 * 1e6)
 
         while open_pq:
-            if time.perf_counter_ns() >= deadline:
+            if time.perf_counter_ns() >= search_cutoff_ns:
                 break
             if expanded >= max_expansions:
                 break
@@ -224,6 +225,7 @@ class AStarAgent(Agent):
                 step_limit=step_limit,
                 weights=self.weights,
                 evaluator=evaluator,
+                deadline_ns=deadline,
             )
         return chosen_action
 

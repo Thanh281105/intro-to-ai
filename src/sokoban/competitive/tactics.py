@@ -1,7 +1,9 @@
 from __future__ import annotations
+import time
 from typing import Optional, TYPE_CHECKING
 from ..map import Pos, SokobanMap
 from ..state import DIRECTIONS
+from ..agents.base import static_distance
 from .evaluator_potential import CompetitiveEvaluator
 from .weights import CompetitiveWeights, DEFAULT_WEIGHTS
 
@@ -10,20 +12,18 @@ if TYPE_CHECKING:
 
 def is_tactical_close_contact(state: CompetitiveState, board: SokobanMap) -> bool:
     """Check if agents are in close tactical proximity or contesting the same box.
-    Gating condition ensures zero overhead when agents are decoupled.
+    Uses wall-aware static distance. Zero Manhattan / Euclidean distance.
     """
     p1 = getattr(state, 'p1', None)
     p2 = getattr(state, 'p2', None)
     if p1 is None or p2 is None:
         return False
-    # Manhattan distance between agents <= 3
-    if abs(p1[0] - p2[0]) + abs(p1[1] - p2[1]) <= 3:
+    # Wall-aware static distance between agents <= 3
+    if static_distance(board, p1, p2) <= 3:
         return True
-    # Proximity to any shared contested box (both within distance 2)
+    # Proximity to any shared contested box (both within static distance 2)
     for b in state.boxes:
-        d1 = abs(p1[0] - b[0]) + abs(p1[1] - b[1])
-        d2 = abs(p2[0] - b[0]) + abs(p2[1] - b[1])
-        if d1 <= 2 and d2 <= 2:
+        if static_distance(board, p1, b) <= 2 and static_distance(board, p2, b) <= 2:
             return True
     return False
 
@@ -51,12 +51,16 @@ def select_robust_tactical_action(
     weights: CompetitiveWeights = DEFAULT_WEIGHTS,
     evaluator: Optional[CompetitiveEvaluator] = None,
     robust_threshold: float = 1.0,
+    deadline_ns: Optional[int] = None,
 ) -> str:
-    """Evaluate 1-step joint minimax robustness when in close tactical proximity.
+    """Evaluate 1-step joint conflict robustness when in close tactical proximity.
     For each candidate action a_i:
         J(a_i) = min_{a_j} Phi_i(resolve(s, a_i, a_j))
     Protects against simultaneous-action collisions, swaps, and box-stealing.
+    Enforces strict real-time deadline limit.
     """
+    if deadline_ns is not None and time.perf_counter_ns() >= deadline_ns:
+        return search_action
     from .state import resolve_with_turn
     if evaluator is None:
         evaluator = CompetitiveEvaluator.get(board)
@@ -88,6 +92,8 @@ def select_robust_tactical_action(
 
     j_scores: dict[str, float] = {}
     for a_my in my_legal:
+        if deadline_ns is not None and time.perf_counter_ns() >= deadline_ns:
+            return search_action
         worst_phi = float('inf')
         for a_opp in opp_legal:
             a1 = a_my if player_id == 1 else a_opp
