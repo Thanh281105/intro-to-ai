@@ -41,6 +41,9 @@ VARIANTS = [
     ('No Score Difference', {'enable_score_diff': False}),
     ('No Support Distance', {'enable_support_dist': False}),
     ('No Opponent Threat', {'enable_threat': False}),
+    ('No Defense', {'enable_defense': False}),
+    ('No Disruption', {'enable_disrupt': False}),
+    ('No Blocking', {'enable_blocking': False}),
     ('No Horizon Scaling', {'enable_horizon_scaling': False}),
     ('No Ownership Logic', {'enable_ownership': False}),
 ]
@@ -52,7 +55,10 @@ def run_ablation():
     print("==================================================")
 
     results = []
-    base_weights = CompetitiveWeights(w_score=30.0, w_push=3.0, w_route=2.0, w_threat=6.0)
+    base_weights = CompetitiveWeights(
+        w_score=30.0, w_push=3.0, w_route=2.0, w_threat=6.0,
+        w_defense=4.0, w_disrupt=4.0, w_blocking=3.0
+    )
 
     for name, kwargs in VARIANTS:
         matches = 0

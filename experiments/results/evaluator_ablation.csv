@@ -1,7 +1,10 @@
 variant,matches,wins,losses,ties,win_rate,variant_score,old_score,score_diff,useful_pushes,ineffective_actions,avg_latency_ms,max_latency_ms,deadline_fallbacks
-Full Potential Evaluator,16,6,2,8,0.375,23,16,7,37,7,22.01,169.11,0
-No Score Difference,16,2,12,2,0.125,12,22,-10,23,5,30.718,294.304,0
-No Support Distance,16,6,2,8,0.375,22,16,6,36,0,7.115,43.647,0
-No Opponent Threat,16,6,2,8,0.375,23,16,7,37,7,19.841,106.444,0
-No Horizon Scaling,16,6,2,8,0.375,23,16,7,37,8,18.697,116.678,0
-No Ownership Logic,16,4,10,2,0.25,14,20,-6,25,0,28.6,130.734,0
+Full Potential Evaluator,16,6,2,8,0.375,23,16,7,37,7,17.894,82.853,0
+No Score Difference,16,2,9,5,0.125,15,21,-6,27,0,28.763,121.176,0
+No Support Distance,16,4,2,10,0.25,21,17,4,33,4,8.321,38.92,0
+No Opponent Threat,16,6,2,8,0.375,23,16,7,39,4,18.729,119.657,0
+No Defense,16,6,2,8,0.375,23,16,7,37,7,18.114,102.648,0
+No Disruption,16,6,2,8,0.375,23,16,7,37,7,18.029,100.433,0
+No Blocking,16,6,2,8,0.375,23,16,7,37,7,16.441,81.501,0
+No Horizon Scaling,16,5,2,9,0.312,22,16,6,38,4,17.089,101.939,0
+No Ownership Logic,16,4,7,5,0.25,17,20,-3,28,0,25.058,113.652,0
