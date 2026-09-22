@@ -113,9 +113,9 @@ class GBFSAgent(Agent):
             self.player_id, step_limit, self.weights
         )
 
-        # OPEN priority queue ordered purely by h(n): (h(n), serial, state, first_action, depth)
+        # OPEN priority queue ordered purely by h(n): (h(n), rank, serial, state, first_action, depth)
         serial = count()
-        open_pq = [(initial_h, next(serial), start_state, None, 0)]
+        open_pq = [(initial_h, 3, next(serial), start_state, None, 0)]
         visited = {(my_pos, state.boxes, state.owners, cur_step)}
 
         best_plan_first_action = None
@@ -132,7 +132,7 @@ class GBFSAgent(Agent):
             if expanded >= max_expansions:
                 break
 
-            h, _, (cur_pos, cur_boxes, cur_owners, c_step, last_action, last_was_push), first_action, depth = heapq.heappop(open_pq)
+            h, rank, _, (cur_pos, cur_boxes, cur_owners, c_step, last_action, last_was_push), first_action, depth = heapq.heappop(open_pq)
             expanded += 1
 
             if h < best_h_seen and first_action is not None:
@@ -145,6 +145,8 @@ class GBFSAgent(Agent):
             if depth >= max_depth:
                 continue
 
+            opp_id = 2 if self.player_id == 1 else 1
+            candidates = []
             for action, (dr, dc) in DIRECTIONS.items():
                 # Acyclic walk-reversal pruning: do not immediately reverse pure walk steps
                 if last_action is not None and not last_was_push and action == opposite_dirs[last_action]:
@@ -165,7 +167,7 @@ class GBFSAgent(Agent):
                     nxt_boxes = frozenset((cur_boxes - {nxt}) | {beyond})
                     # Update box ownership semantics
                     owners_dict = dict(cur_owners)
-                    owners_dict.pop(nxt, None)
+                    old_owner = owners_dict.pop(nxt, None)
                     if beyond in evaluator.goals:
                         owners_dict[beyond] = self.player_id
                     nxt_owners = tuple(
@@ -173,12 +175,24 @@ class GBFSAgent(Agent):
                     )
                     nxt_pos = nxt
                     is_push = True
+                    if beyond in evaluator.goals:
+                        move_rank = 0
+                    elif nxt in evaluator.goals and old_owner == opp_id:
+                        move_rank = 1
+                    else:
+                        move_rank = 2
                 else:
                     nxt_boxes = cur_boxes
                     nxt_owners = cur_owners
                     nxt_pos = nxt
                     is_push = False
+                    move_rank = 3
 
+                candidates.append((move_rank, action, is_push, nxt_pos, nxt_boxes, nxt_owners))
+
+            candidates.sort(key=lambda c: c[0])
+
+            for move_rank, action, is_push, nxt_pos, nxt_boxes, nxt_owners in candidates:
                 nxt_step = c_step + 1
                 nxt_state_key = (nxt_pos, nxt_boxes, nxt_owners, nxt_step)
 
@@ -191,7 +205,7 @@ class GBFSAgent(Agent):
                     if nh < float('inf'):
                         fa = first_action if first_action is not None else action
                         nxt_search_state = (nxt_pos, nxt_boxes, nxt_owners, nxt_step, action, is_push)
-                        heapq.heappush(open_pq, (nh, next(serial), nxt_search_state, fa, depth + 1))
+                        heapq.heappush(open_pq, (nh, move_rank, next(serial), nxt_search_state, fa, depth + 1))
 
         return best_plan_first_action or fallback_action
 

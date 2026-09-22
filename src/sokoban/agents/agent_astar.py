@@ -117,7 +117,7 @@ class AStarAgent(Agent):
         )
 
         serial = count()
-        open_pq = [(initial_h, 0, next(serial), start_state, None, 0)]
+        open_pq = [(initial_h, 3, 0, next(serial), start_state, None, 0)]
         best_g = {(my_pos, state.boxes, state.owners, cur_step): 0}
         best_plan_first_action = None
         best_h_seen = initial_h
@@ -133,7 +133,7 @@ class AStarAgent(Agent):
             if expanded >= max_expansions:
                 break
 
-            f, g, _, (cur_pos, cur_boxes, cur_owners, c_step, last_action, last_was_push), first_action, depth = heapq.heappop(open_pq)
+            f, rank, g, _, (cur_pos, cur_boxes, cur_owners, c_step, last_action, last_was_push), first_action, depth = heapq.heappop(open_pq)
             state_key = (cur_pos, cur_boxes, cur_owners, c_step)
             if g > best_g.get(state_key, float('inf')):
                 continue
@@ -150,6 +150,8 @@ class AStarAgent(Agent):
             if depth >= max_depth:
                 continue
 
+            opp_id = 2 if self.player_id == 1 else 1
+            candidates = []
             for action, (dr, dc) in DIRECTIONS.items():
                 # Acyclic walk-reversal pruning: do not immediately reverse pure walk steps
                 if last_action is not None and not last_was_push and action == opposite_dirs[last_action]:
@@ -170,7 +172,7 @@ class AStarAgent(Agent):
                     nxt_boxes = frozenset((cur_boxes - {nxt}) | {beyond})
                     # Update box ownership semantics
                     owners_dict = dict(cur_owners)
-                    owners_dict.pop(nxt, None)
+                    old_owner = owners_dict.pop(nxt, None)
                     if beyond in evaluator.goals:
                         owners_dict[beyond] = self.player_id
                     nxt_owners = tuple(
@@ -178,12 +180,24 @@ class AStarAgent(Agent):
                     )
                     nxt_pos = nxt
                     is_push = True
+                    if beyond in evaluator.goals:
+                        move_rank = 0
+                    elif nxt in evaluator.goals and old_owner == opp_id:
+                        move_rank = 1
+                    else:
+                        move_rank = 2
                 else:
                     nxt_boxes = cur_boxes
                     nxt_owners = cur_owners
                     nxt_pos = nxt
                     is_push = False
+                    move_rank = 3
 
+                candidates.append((move_rank, action, is_push, nxt_pos, nxt_boxes, nxt_owners))
+
+            candidates.sort(key=lambda c: c[0])
+
+            for move_rank, action, is_push, nxt_pos, nxt_boxes, nxt_owners in candidates:
                 nxt_step = c_step + 1
                 nxt_state_key = (nxt_pos, nxt_boxes, nxt_owners, nxt_step)
                 ng = g + 1
@@ -197,7 +211,7 @@ class AStarAgent(Agent):
                     if nh < float('inf'):
                         fa = first_action if first_action is not None else action
                         nxt_search_state = (nxt_pos, nxt_boxes, nxt_owners, nxt_step, action, is_push)
-                        heapq.heappush(open_pq, (ng + nh, ng, next(serial), nxt_search_state, fa, depth + 1))
+                        heapq.heappush(open_pq, (ng + nh, move_rank, ng, next(serial), nxt_search_state, fa, depth + 1))
 
         return best_plan_first_action or fallback_action
 
