@@ -35,6 +35,15 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
         self._threat_cache: dict[tuple, float] = {}
         self._defense_cache: dict[tuple, float] = {}
         self._disrupt_cache: dict[tuple, float] = {}
+        self._blocking_cache: dict[tuple, float] = {}
+        # Precompute static corridor chokepoints: floor cells with opposing walls
+        self.chokepoints = frozenset(
+            p for p in board.floor_cells
+            if (
+                (not board.free((p[0] - 1, p[1])) and not board.free((p[0] + 1, p[1])))
+                or (not board.free((p[0], p[1] - 1)) and not board.free((p[0], p[1] + 1)))
+            )
+        )
 
     def is_deadlock_square(self, p: Pos) -> bool:
         """Check if cell is a sound static deadlock square."""
@@ -357,6 +366,65 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
 
         return disrupt_max
 
+    def compute_blocking(
+        self,
+        player_pos: Pos,
+        opp_pos: Pos,
+        boxes: frozenset[Pos],
+        owner_map: dict[Pos, int],
+        player_id: int,
+    ) -> float:
+        """Compute blocking / corridor control value.
+        Rewards occupying a chokepoint or bottleneck cell that intercepts opponent
+        movement toward critical push support cells (goals or ejections).
+        """
+        if player_pos not in self.chokepoints:
+            return 0.0
+
+        cache_key = (player_pos, opp_pos, boxes, tuple(sorted(owner_map.items())), player_id)
+        if cache_key in self._blocking_cache:
+            return self._blocking_cache[cache_key]
+
+        opp_id = 2 if player_id == 1 else 1
+
+        opp_targets = []
+        for b in boxes:
+            b_owner = owner_map.get(b, 0)
+            is_player_completed = (b in self.goals and b_owner == player_id)
+            is_opp_completed = (b in self.goals and b_owner == opp_id)
+            if is_opp_completed:
+                continue
+
+            for action, (dr, dc) in DIRECTIONS.items():
+                dest = (b[0] + dr, b[1] + dc)
+                supp = (b[0] - dr, b[1] - dc)
+                if not self.board.free(dest) or not self.board.free(supp):
+                    continue
+                if supp in boxes or dest in boxes:
+                    continue
+
+                if is_player_completed or dest in self.goals:
+                    opp_targets.append(supp)
+
+        if not opp_targets:
+            self._blocking_cache[cache_key] = 0.0
+            return 0.0
+
+        max_block = 0.0
+        for supp in opp_targets:
+            d_opp_supp = static_distance(self.board, opp_pos, supp)
+            if d_opp_supp == float('inf') or d_opp_supp > 6:
+                continue
+            d_opp_p = static_distance(self.board, opp_pos, player_pos)
+            d_p_supp = static_distance(self.board, player_pos, supp)
+            if d_opp_p > 0 and d_opp_p + d_p_supp == d_opp_supp:
+                block_val = 1.0 / (d_opp_p + 1)
+                if block_val > max_block:
+                    max_block = block_val
+
+        self._blocking_cache[cache_key] = max_block
+        return max_block
+
     def evaluate_phi(
         self,
         player_pos: Pos,
@@ -374,6 +442,7 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
         enable_threat: bool = True,
         enable_defense: bool = True,
         enable_disrupt: bool = True,
+        enable_blocking: bool = True,
     ) -> float:
         """Compute state potential Phi_i(s) from perspective of Agent i."""
         owner_map = dict(owners)
@@ -429,6 +498,13 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
         else:
             disruption = 0.0
 
+        if enable_blocking and weights.w_blocking > 0:
+            blocking = self.compute_blocking(
+                player_pos, opp_pos, boxes, owner_map if enable_ownership else {}, player_id
+            )
+        else:
+            blocking = 0.0
+
         # Phase 3: Dynamic Horizon Strategy
         if enable_horizon_scaling and step_limit > 0:
             u = min(1.0, max(0.0, step / step_limit))
@@ -464,12 +540,21 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
                 w_disrupt_eff = weights.w_disrupt * (0.3 * (1.0 - u))
             else:
                 w_disrupt_eff = weights.w_disrupt * (0.5 + 0.5 * u)
+
+            # Blocking weight: prioritized when leading or tied late
+            if score_diff > 0:
+                w_blocking_eff = weights.w_blocking * (0.8 + 1.2 * u)
+            elif score_diff < 0:
+                w_blocking_eff = weights.w_blocking * (0.3 * (1.0 - u))
+            else:
+                w_blocking_eff = weights.w_blocking
         else:
             w_score_eff = weights.w_score
             w_push_eff = weights.w_push
             w_threat_eff = weights.w_threat
             w_defense_eff = weights.w_defense
             w_disrupt_eff = weights.w_disrupt
+            w_blocking_eff = weights.w_blocking
 
         phi = (
             w_score_eff * score_diff
@@ -478,6 +563,7 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
             - w_threat_eff * threat
             + w_defense_eff * defense
             + w_disrupt_eff * disruption
+            + w_blocking_eff * blocking
         )
         return float(phi)
 
@@ -569,6 +655,7 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
 
         enable_defense = kwargs.get('enable_defense', True)
         enable_disrupt = kwargs.get('enable_disrupt', True)
+        enable_blocking = kwargs.get('enable_blocking', True)
 
         if enable_defense and weights.w_defense > 0:
             defense = self.compute_defense(
@@ -584,12 +671,26 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
         else:
             disruption = 0.0
 
+        if enable_blocking and weights.w_blocking > 0:
+            blocking = self.compute_blocking(
+                player_pos, opp_pos, boxes, owner_map if enable_ownership else {}, player_id
+            )
+        else:
+            blocking = 0.0
+
         u = min(1.0, max(0.0, step / step_limit)) if (step_limit > 0 and enable_horizon_scaling) else 0.0
         w_score_eff = weights.w_score * (1.0 + weights.horizon_alpha * u)
         if score_diff > 0 and u > 0.7:
             w_push_eff = weights.w_push * (1.0 - 0.25 * u)
         else:
             w_push_eff = weights.w_push
+
+        if score_diff > 0 and u > 0:
+            w_blocking_eff = weights.w_blocking * (0.8 + 1.2 * u)
+        elif score_diff < 0 and u > 0:
+            w_blocking_eff = weights.w_blocking * (0.3 * (1.0 - u))
+        else:
+            w_blocking_eff = weights.w_blocking
 
         phi = self.evaluate_phi(
             player_pos, opp_pos, boxes, owners, step, player_id, step_limit, weights, **kwargs
@@ -613,6 +714,8 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
             'defense_contrib': round(weights.w_defense * defense, 2),
             'disruption': round(disruption, 2),
             'disrupt_contrib': round(weights.w_disrupt * disruption, 2),
+            'blocking': round(blocking, 2),
+            'blocking_contrib': round(w_blocking_eff * blocking, 2),
             'phi': round(phi, 2),
             'h_comp': round(-phi, 2),
         }
