@@ -1,4 +1,4 @@
 commit_sha,timestamp,split,algorithm,matches,new_wins,old_wins,ties,win_rate_new,new_score,old_score,score_diff_total,mean_score_diff,median_score_diff,std_score_diff,ci_95_low,ci_95_high,useful_pushes_new,useful_pushes_old,ineffective_new,ineffective_old,avg_latency_new_ms,avg_latency_old_ms,max_latency_new_ms,max_latency_old_ms,fallbacks_new,fallbacks_old
-3a68b6e,2026-09-22T11:14:24.292910,tuning_val,astar,60,36,4,20,0.6,106,56,50,0.833,1.0,1.044,0.583,1.1,168,134,228,204,13.98,5.458,116.007,38.671,0,0
-3a68b6e,2026-09-22T11:14:24.292910,tuning_val,gbfs,60,36,4,20,0.6,106,54,52,0.867,1.0,1.065,0.6,1.133,178,140,114,86,7.962,4.376,96.285,26.201,0,0
-3a68b6e,2026-09-22T11:14:24.292910,tuning_val,ALL,120,72,8,40,0.6,212,110,102,0.85,1.0,1.05,0.675,1.033,346,274,342,290,10.971,4.917,116.007,38.671,0,0
+c32af2a,2026-09-22T11:34:07.798212,tuning_val,astar,60,36,4,20,0.6,106,56,50,0.833,1.0,1.044,0.583,1.1,168,134,220,198,14.334,5.55,107.122,35.623,0,0
+c32af2a,2026-09-22T11:34:07.798212,tuning_val,gbfs,60,36,4,20,0.6,108,52,56,0.933,1.0,1.133,0.633,1.217,184,146,78,48,8.258,4.374,84.281,41.871,0,0
+c32af2a,2026-09-22T11:34:07.798212,tuning_val,ALL,120,72,8,40,0.6,214,108,106,0.883,1.0,1.086,0.692,1.083,352,280,298,246,11.296,4.962,107.122,41.871,0,0

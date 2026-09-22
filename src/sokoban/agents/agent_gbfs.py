@@ -13,6 +13,7 @@ from ..competitive.evaluator import (
     MAX_SEARCH_DEPTH,
     MAX_SEARCH_EXPANSIONS,
 )
+from ..competitive.tactics import is_tactical_close_contact, select_robust_tactical_action
 
 class GBFSAgent(Agent):
     name = 'GBFS'
@@ -207,5 +208,16 @@ class GBFSAgent(Agent):
                         nxt_search_state = (nxt_pos, nxt_boxes, nxt_owners, nxt_step, action, is_push)
                         heapq.heappush(open_pq, (nh, move_rank, next(serial), nxt_search_state, fa, depth + 1))
 
-        return best_plan_first_action or fallback_action
+        chosen_action = best_plan_first_action or fallback_action
+        if is_tactical_close_contact(state, board):
+            chosen_action = select_robust_tactical_action(
+                state=state,
+                board=board,
+                search_action=chosen_action,
+                player_id=self.player_id,
+                step_limit=step_limit,
+                weights=self.weights,
+                evaluator=evaluator,
+            )
+        return chosen_action
 
