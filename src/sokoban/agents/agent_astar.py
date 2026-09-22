@@ -70,7 +70,7 @@ class AStarAgent(Agent):
                 if g > best_g.get((cur_pos, cur_boxes), float('inf')):
                     continue
                 expanded += 1
-                cur_h = old_eval.evaluate_h_state(cur_pos, cur_boxes)
+                cur_h = f - g
                 if cur_h < best_h_seen and first_action is not None:
                     best_h_seen = cur_h
                     best_plan_first_action = first_action
@@ -139,10 +139,7 @@ class AStarAgent(Agent):
                 continue
 
             expanded += 1
-            cur_h = evaluator.evaluate_h(
-                cur_pos, opp_pos, cur_boxes, cur_owners, c_step,
-                self.player_id, step_limit, self.weights
-            )
+            cur_h = f - g
 
             if cur_h < best_h_seen and first_action is not None:
                 best_h_seen = cur_h

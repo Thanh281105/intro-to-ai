@@ -32,6 +32,7 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
             if p not in self.goals and is_static_deadlock(p, self.heuristic)
         )
         self._support_cache: dict[tuple, float] = {}
+        self._threat_cache: dict[tuple, float] = {}
 
     def is_deadlock_square(self, p: Pos) -> bool:
         """Check if cell is a sound static deadlock square."""
@@ -172,6 +173,96 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
         self._support_cache[cache_key] = res
         return res
 
+    def compute_opponent_threat(
+        self,
+        player_pos: Pos,
+        opp_pos: Pos,
+        boxes: frozenset[Pos],
+        owner_map: dict[Pos, int],
+        player_id: int,
+    ) -> float:
+        """Compute competitive threat posed by opponent on state potential.
+        Evaluates both:
+        1. Ejection Threat: opponent pushing player's completed box out of goals.
+        2. Goal Threat: opponent scoring new boxes (immediate or advancing).
+        Uses single-pass BFS from opp_pos for sub-millisecond execution.
+        """
+        cache_key = (opp_pos, boxes, tuple(sorted(owner_map.items())), player_id)
+        if cache_key in self._threat_cache:
+            return self._threat_cache[cache_key]
+
+        opp_id = 2 if player_id == 1 else 1
+
+        # Single-pass BFS from opp_pos avoiding walls and boxes
+        opp_dist: dict[Pos, int] = {opp_pos: 0}
+        q = deque([opp_pos])
+        while q:
+            cur = q.popleft()
+            cd = opp_dist[cur]
+            for dr, dc in ((-1, 0), (0, 1), (1, 0), (0, -1)):
+                nxt = (cur[0] + dr, cur[1] + dc)
+                if (
+                    self.board.free(nxt)
+                    and nxt not in boxes
+                    and nxt not in opp_dist
+                ):
+                    opp_dist[nxt] = cd + 1
+                    q.append(nxt)
+
+        threat_eject = 0.0
+        threat_goal = 0.0
+
+        for b in boxes:
+            b_owner = owner_map.get(b, 0)
+            is_player_completed = (b in self.goals and b_owner == player_id)
+            is_opp_completed = (b in self.goals and b_owner == opp_id)
+            if is_opp_completed:
+                continue
+
+            for action, (dr, dc) in DIRECTIONS.items():
+                dest = (b[0] + dr, b[1] + dc)
+                supp = (b[0] - dr, b[1] - dc)
+
+                if not self.board.free(dest) or not self.board.free(supp):
+                    continue
+                if supp in boxes:
+                    continue
+                if dest in boxes:
+                    continue
+                # Static deadlock pruning (ejections remain threatening even if pushed to dead square)
+                if not is_player_completed and dest not in self.goals and is_static_deadlock(dest, self.heuristic):
+                    continue
+
+                d_opp = opp_dist.get(supp, float('inf'))
+                if d_opp == float('inf'):
+                    continue
+
+                # Ejection Threat: opponent pushing player's completed box
+                if is_player_completed:
+                    eta_eject = d_opp + 1
+                    if eta_eject <= 2:
+                        threat_eject = max(threat_eject, 1.0 / eta_eject)
+                    continue
+
+                # Goal Threat: opponent scoring directly into a goal
+                if dest in self.goals:
+                    eta_goal = d_opp + 1
+                    if eta_goal <= 3:
+                        threat_goal = max(threat_goal, 1.0 / eta_goal)
+                    continue
+
+                # Advancing Threat: advancing an uncompleted box closer to goals
+                cur_dist = min((self.heuristic.distance(b, g) for g in self.goals), default=float('inf'))
+                nxt_dist = min((self.heuristic.distance(dest, g) for g in self.goals), default=float('inf'))
+                if nxt_dist < cur_dist and nxt_dist != float('inf'):
+                    eta_adv = d_opp + 1 + nxt_dist
+                    if eta_adv <= 3:
+                        threat_goal = max(threat_goal, 0.7 / eta_adv)
+
+        threat = max(threat_goal, 1.5 * threat_eject)
+        self._threat_cache[cache_key] = threat
+        return threat
+
     def evaluate_phi(
         self,
         player_pos: Pos,
@@ -186,6 +277,7 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
         enable_support_dist: bool = True,
         enable_horizon_scaling: bool = True,
         enable_ownership: bool = True,
+        enable_threat: bool = True,
     ) -> float:
         """Compute state potential Phi_i(s) from perspective of Agent i."""
         owner_map = dict(owners)
@@ -220,6 +312,13 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
         else:
             support_dist = 0.0
 
+        if enable_threat and weights.w_threat > 0:
+            threat = self.compute_opponent_threat(
+                player_pos, opp_pos, boxes, owner_map if enable_ownership else {}, player_id
+            )
+        else:
+            threat = 0.0
+
         # Horizon awareness: score diff matters more near the end
         if enable_horizon_scaling and step_limit > 0:
             u = min(1.0, max(0.0, step / step_limit))
@@ -236,6 +335,7 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
             w_score_eff * score_diff
             - w_push_eff * push_cost
             - weights.w_route * support_dist
+            - weights.w_threat * threat
         )
         return float(phi)
 
@@ -298,6 +398,7 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
         enable_score_diff = kwargs.get('enable_score_diff', True)
         enable_support_dist = kwargs.get('enable_support_dist', True)
         enable_horizon_scaling = kwargs.get('enable_horizon_scaling', True)
+        enable_threat = kwargs.get('enable_threat', True)
 
         owner_map = dict(owners)
         if enable_ownership:
@@ -316,6 +417,13 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
             )
         else:
             support_dist = 0.0
+
+        if enable_threat and weights.w_threat > 0:
+            threat = self.compute_opponent_threat(
+                player_pos, opp_pos, boxes, owner_map if enable_ownership else {}, player_id
+            )
+        else:
+            threat = 0.0
 
         u = min(1.0, max(0.0, step / step_limit)) if (step_limit > 0 and enable_horizon_scaling) else 0.0
         w_score_eff = weights.w_score * (1.0 + weights.horizon_alpha * u)
@@ -340,6 +448,8 @@ class CompetitiveEvaluator(BaseCompetitiveEvaluator):
             'push_contrib': round(-w_push_eff * push_cost, 2),
             'support_dist': round(support_dist, 2),
             'route_contrib': round(-weights.w_route * support_dist, 2),
+            'threat': round(threat, 2),
+            'threat_contrib': round(-weights.w_threat * threat, 2),
             'phi': round(phi, 2),
             'h_comp': round(-phi, 2),
         }
