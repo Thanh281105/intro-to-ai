@@ -23,13 +23,18 @@ def graph_search(problem, use_heuristic=False, prune_deadlocks=True):
     from ..deadlock import state_has_deadlock
     start_time = time.perf_counter_ns(); start = problem.initial_state
     heuristic = problem.heuristic_model
-    frontier = []; serial = count(); gbest = {start: 0}; parent = {start: (None, None)}
+    frontier = []
+    explored = set()
+    serial = count()
+    g_n = {start: 0}
+    parent = {start: (None, None)}
     initial_h = heuristic(start) if use_heuristic else 0
     heapq.heappush(frontier, (initial_h, 0, next(serial), start))
     expanded = generated = max_frontier = 0
     while frontier:
         _, popped_g, _, state = heapq.heappop(frontier)
-        if popped_g != gbest.get(state): continue
+        if state in explored:
+            continue
         if problem.is_goal(state):
             actions = []; states = []; cur = state
             while cur is not None:
@@ -40,15 +45,21 @@ def graph_search(problem, use_heuristic=False, prune_deadlocks=True):
             return SearchResult(True, actions, popped_g, expanded, generated, max_frontier,
                 (time.perf_counter_ns() - start_time) / 1e6, states,
                 heuristic.cache_hits + heuristic.cache_misses, heuristic.cache_hits, heuristic.cache_misses)
+        explored.add(state)
         expanded += 1
         for action, nxt in problem.get_successors(state):
             generated += 1
-            if prune_deadlocks and state_has_deadlock(nxt, heuristic): continue
-            ng = popped_g + 1
-            if ng < gbest.get(nxt, float('inf')):
-                gbest[nxt] = ng; parent[nxt] = (state, action)
-                h = heuristic(nxt) if use_heuristic else 0
-                heapq.heappush(frontier, (ng + h, ng, next(serial), nxt))
+            if nxt in explored:
+                continue
+            if prune_deadlocks and state_has_deadlock(nxt, heuristic):
+                continue
+            new_g = popped_g + 1
+            if new_g < g_n.get(nxt, float('inf')):
+                g_n[nxt] = new_g
+                parent[nxt] = (state, action)
+                h_n = heuristic(nxt) if use_heuristic else 0
+                f_n = new_g + h_n
+                heapq.heappush(frontier, (f_n, new_g, next(serial), nxt))
                 max_frontier = max(max_frontier, len(frontier))
     return SearchResult(False, [], None, expanded, generated, max_frontier,
         (time.perf_counter_ns() - start_time) / 1e6, [],
